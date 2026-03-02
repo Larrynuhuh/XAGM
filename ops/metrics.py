@@ -43,7 +43,7 @@ def pldist(l: Matrix, pt: Vector) -> Scalar:
     a = l[:-1]
     b = l[1:]
 
-    curve_dist = jax.jit(jax.vmap(segdist, in_axes = (0, 0, None)))
+    curve_dist = jax.vmap(segdist, in_axes = (0, 0, None))
     summed = curve_dist(a, b, pt)
 
     return jnp.min(summed)

@@ -1,25 +1,19 @@
-import geoutils as us
+
 import jax
 import jax.numpy as jnp
 
 from ops import vectors as vct
+from ops import metrics as mtc
+from primitives import linear as lin
 
-triangle = jnp.array([
-        [0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0]
-    ])
+p1 = jnp.zeros(10)
+p2 = jnp.ones(10)
+my_10d_line = lin.line(p1, p2, 100)
 
+# 3. Random 10D Point
+test_pt = jax.random.normal(jax.random.PRNGKey(0), (10,))
 
-result_normal = vct.normal(triangle)
+# 4. Use Geoborn's pldist to find the distance
+d = mtc.pldist(my_10d_line, test_pt)
 
-
-print(f"Input Shape: {triangle.shape}")   # Should be (3, 3)
-print(f"Output Normal: {result_normal}")  # Should be [0, 0, 1] or [0, 0, -1]
-print(f"Output Shape: {result_normal.shape}")
-
-
-batch_triangles = jnp.stack([triangle, triangle]) 
-batch_normals = vct.vnormal(batch_triangles)
-
-print(f"Batch Output Shape: {batch_normals.shape}")
+print(f"10D Distance: {d}")
