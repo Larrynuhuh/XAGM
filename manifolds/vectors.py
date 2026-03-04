@@ -4,56 +4,64 @@ import jax
 import jax.numpy as jnp
 from geoutils import Vector, Matrix, Scalar, Tensor
 
+from basis import metrics as mtc
+
 @jax.jit
-def normal(basis: Matrix) -> Vector:
+def normal(g: Matrix, basis: Matrix) -> Vector:
     center = jnp.mean(basis, axis = 0)
-    cb = basis - center
+    cbf = basis - center
+
+    sg = g + jnp.eye(g.shape[-1]) * 1e-12
+
+    l = jnp.linalg.cholesky(sg)
+    cb = cbf @ l
 
     u, s, vh = jnp.linalg.svd(cb, full_matrices = False)
     normal = vh[-1]
+    n_mani = jnp.linalg.solve(l.T, normal)
 
-    check = jnp.dot(normal, center)
-    nrm = jnp.where(check < 0, -normal, normal)
-    return us.div(nrm, (jnp.linalg.norm(nrm)))
+    check = mtc.iprod(g, n_mani, center)
+    nrm = jnp.where(check < 0, -n_mani, n_mani)
+    return us.div(nrm, (mtc.norm(g, nrm)))
 
 @jax.jit
-def vnormal(basis: Tensor) -> Matrix | Tensor: 
-    return jax.vmap(normal, in_axes=(0,))(basis)
+def xnormal(g: Matrix, basis: Tensor) -> Matrix | Tensor: 
+    return jax.vmap(normal, in_axes=(0, 0))(g, basis)
 
 #dot product territory
 @jax.jit
-def project_scalar(a: Vector, b: Vector) -> Scalar: 
+def scalproj(g: Matrix, a: Vector, b: Vector) -> Scalar: 
     
-    norm = jnp.linalg.norm(b)
-    prod = us.div(jnp.dot(a, b), norm)
+    norm = mtc.norm(g, b)
+    prod = us.div(mtc.iprod(g, a, b), norm)
 
     return prod
 
 @jax.jit
-def scalproj(a: Matrix, b: Matrix) -> Vector:
-    return jax.vmap(project_scalar, in_axes = (0, 0))(a, b)
+def xscalproj(g: Matrix, a: Matrix, b: Matrix) -> Vector:
+    return jax.vmap(scalproj, in_axes = (0, 0))(g, a, b)
 
 @jax.jit
-def project_vector(a: Vector, b: Vector) -> Vector:
+def vectproj(g: Matrix, a: Vector, b: Vector) -> Vector:
 
-    term = jnp.dot(b, b)
-    prod = us.div(jnp.dot(a, b), term)
+    term = mtc.iprod(g, b, b)
+    prod = us.div(mtc.iprod(g, a, b), term)
     proj = prod * b
 
     return proj
 
 @jax.jit
-def vectproj(a: Matrix, b: Matrix) -> Matrix:
-    return jax.vmap(project_vector, in_axes = (0, 0))(a, b)
+def xvectproj(g: Matrix, a: Matrix, b: Matrix) -> Matrix:
+    return jax.vmap(vectproj, in_axes = (0, 0))(g, a, b)
 
 @jax.jit
-def reject_vector(a: Vector, b: Vector) -> Vector:
+def rejvect(g: Matrix, a: Vector, b: Vector) -> Vector:
 
-    proj = project_vector(a, b)
+    proj = vectproj(g, a, b)
     reject = a - proj
 
     return reject
 
 @jax.jit
-def rejvect(a: Matrix, b: Matrix) -> Matrix:
-    return jax.vmap(reject_vector, in_axes = (0, 0))(a, b)
+def xrejvect(g: Matrix, a: Matrix, b: Matrix) -> Matrix:
+    return jax.vmap(rejvect, in_axes = (0, 0))(g, a, b)
