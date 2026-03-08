@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "XAGM"
 version = "0.1.0"
 dependencies = [
-    "jax", "jaxlib",
+    "jax", "jaxlib", "jaxtyping"
 ]
 # Add any dependencies you need here, e.g., ["jax", "jaxlib"]
 

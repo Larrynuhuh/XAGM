@@ -1,8 +1,14 @@
 import geoutils as us
 import jax 
 import jax.numpy as jnp
-from geoutils import Vector, Matrix, Scalar, Tensor
+from geoutils import Vector, Matrix, Scalar, Tensor, Array
 
+@jax.jit
+def grid(idx: JAXArray, dimens: tuple):
+    g = jnp.unravel_index(idx, dimens)
+    ng = jnp.stack(g, axis=-1)
+
+    return ng
 
 @jax.jit(static_argnums = (2,))
 def line(p1: Vector, p2: Vector, segs: int) -> Matrix:

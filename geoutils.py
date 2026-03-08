@@ -24,3 +24,4 @@ type Scalar = Float64[Array, ""] # 0D [1]
 type Vector = Float64[Array, "N"] # 1D [1, 2]
 type Matrix = Float64[Array, "M N"] # 2D [[1, 2], [2, 1]]
 type Tensor = Float64[Array, "*batch M N O"] # 3-D+
+type JAXArray = Float64[Array]
