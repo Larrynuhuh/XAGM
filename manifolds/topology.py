@@ -21,7 +21,7 @@ def midp(p1: Vector, p2: Vector) -> Vector:
 
 @jax.jit
 def xmidp(p1: Matrix, p2: Matrix) -> Matrix:
-    return jax.vmap(midp, in_axes=(0,0,0))(p1, p2)
+    return jax.vmap(midp, in_axes=(0,0))(p1, p2)
 
 
 # to check distance of point from line
@@ -50,6 +50,6 @@ def pldist(g: Matrix, l: Matrix, pt: Vector) -> Scalar:
     return jnp.min(summed)
 
 @jax.jit
-def xpldist(l: Tensor, pt: Matrix) -> Vector:
+def xpldist(g: Matrix, l: Tensor, pt: Matrix) -> Vector:
     return jax.vmap(pldist, in_axes = (0, 0, 0))(g, l, pt)
 

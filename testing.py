@@ -9,13 +9,13 @@ from manifolds import vectors as vct
 import geoutils as us 
 
 
-test_indices = jnp.array([0, 4, 8])
-grid_shape = (3, 3)
+shape_6d = (2, 3, 4, 5, 6, 7) 
 
-# 2. Run it
-result = lin.grid(test_indices, grid_shape)
+# 2. Pass a list of 3 specific indices
+test_indices = jnp.array([0, 1234, 5039])
 
-# 3. Visual Verification
-print("Resulting Array:\n", result)
-print("Shape:", result.shape)
-print("Type:", type(result))
+# 3. Run the function
+result = lin.grid(test_indices, shape_6d)
+
+print("6D Tall Matrix:\n", result)
+print("Shape (N, D):", result.shape)

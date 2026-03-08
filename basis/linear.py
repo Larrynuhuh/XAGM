@@ -5,7 +5,8 @@ from geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
 
 @jax.jit
 def grid(idx: JAXArray, dimens: tuple):
-    g = jnp.unravel_index(idx, dimens)
+    fg = jnp.unravel_index(idx, dimens)
+    g = fg[::-1]
     ng = jnp.stack(g, axis=-1)
 
     return ng
