@@ -3,3 +3,4 @@ Name: XAGM
 Version: 0.1.0
 Requires-Dist: jax
 Requires-Dist: jaxlib
+Requires-Dist: jaxtyping
