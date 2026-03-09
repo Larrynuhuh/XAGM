@@ -13,6 +13,5 @@ dependencies = [
 [tool.setuptools]
 # 1. Explicitly list the folders that are Python packages
 packages = ["manifolds", "basis"]
-
-# 2. Explicitly list standalone files in your root (like utils.py)
 py-modules = ["geoutils", "testing"]
+
