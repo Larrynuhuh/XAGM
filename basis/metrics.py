@@ -17,6 +17,10 @@ xiprod = jax.jit(jax.vmap(iprod, in_axes=(None, 0, 0)))
 def norm(g: Matrix, u: Vector) -> Scalar: 
     return jnp.sqrt(iprod(g, u, u))
 
+@jax.jit
+def xnorm(g: Matrix, u: Matrix) -> Vector: 
+    return jax.vmap(norm, in_axes=(None, 0))(g, u)
+
 
 @jax.jit(static_argnums = (0,))
 def fwdmet(f, v: Vector) -> Matrix:
