@@ -42,7 +42,7 @@ def scalproj(g: Matrix, a: Vector, b: Vector) -> Scalar:
 
 @jax.jit
 def xscalproj(g: Matrix, a: Matrix, b: Matrix) -> Vector:
-    return jax.vmap(scalproj, in_axes = (0, 0))(g, a, b)
+    return jax.vmap(scalproj, in_axes = (None, 0, 0))(g, a, b)
 
 @jax.jit
 def vectproj(g: Matrix, a: Vector, b: Vector) -> Vector:
@@ -55,7 +55,7 @@ def vectproj(g: Matrix, a: Vector, b: Vector) -> Vector:
 
 @jax.jit
 def xvectproj(g: Matrix, a: Matrix, b: Matrix) -> Matrix:
-    return jax.vmap(vectproj, in_axes = (0, 0))(g, a, b)
+    return jax.vmap(vectproj, in_axes = (None, 0, 0))(g, a, b)
 
 @jax.jit
 def rejvect(g: Matrix, a: Vector, b: Vector) -> Vector:
@@ -67,7 +67,7 @@ def rejvect(g: Matrix, a: Vector, b: Vector) -> Vector:
 
 @jax.jit
 def xrejvect(g: Matrix, a: Matrix, b: Matrix) -> Matrix:
-    return jax.vmap(rejvect, in_axes = (0, 0))(g, a, b)
+    return jax.vmap(rejvect, in_axes = (None, 0, 0))(g, a, b)
 
 @jax.jit
 def unitize(g: Matrix, u: Vector) -> Vector: 
