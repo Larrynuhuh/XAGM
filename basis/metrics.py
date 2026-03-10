@@ -11,7 +11,10 @@ def euclid(x: Vector) -> Matrix:
 def iprod(g: Matrix, u: Vector, v: Vector) -> Scalar: 
     return jnp.einsum('i, ij, j -> ', u, g, v)
 
-xiprod = jax.jit(jax.vmap(iprod, in_axes=(None, 0, 0)))
+@jax.jit
+def xiprod(g: Matrix, u: Matrix, v: Matrix) -> Vector:
+    return jax.vmap(iprod, in_axes=(None, 0, 0))(g, u, v)
+
 
 @jax.jit
 def norm(g: Matrix, u: Vector) -> Scalar: 

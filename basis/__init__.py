@@ -1,3 +1,3 @@
-from .linear import (grid, line, vline, polyline, vpolyline)
+from .linear import (grid, line, xline, polyline, xpolyline)
 
-from .metrics import (euclid, iprod, norm, xnorm, fwdmet, revmet)
+from .metrics import (euclid, iprod, xiprod, norm, xnorm, fwdmet, revmet)
