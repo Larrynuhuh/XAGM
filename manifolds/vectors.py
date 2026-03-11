@@ -7,29 +7,51 @@ from geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
 from basis import metrics as mtc
 
 @jax.jit
-def normal(g: Matrix, basis: Matrix) -> Vector:
-    center = jnp.mean(basis, axis = 0)
-    cbf = basis - center
+def pnrm(g: Matrix, basis: Matrix) -> Matrix:
+    center = jnp.mean(basis, axis=0)
+    centered = basis - center
 
-    eigval, eigvect = jnp.linalg.eigh(g)
-    s = eigval > 0
-    seigval = jnp.where(s, jnp.sqrt(eigval), 0.0)
+    Q, R = jnp.linalg.qr(basis.T, mode='complete')
+    rank = jnp.linalg.matrix_rank(centered)
 
-    l = jnp.einsum('ik, k, jk -> ij', eigvect, seigval, eigvect)
+    r_norm = jnp.linalg.solve(g, Q)
     
-    cb = cbf @ l
+    matrix = xunitize(g, r_norm)
 
-    u, s, vh = jnp.linalg.svd(cb, full_matrices = False)
-    raw_norm = vh[-1]
-    n_mani = jnp.linalg.pinv(l.T) @ raw_norm
+    deter = jnp.linalg.det(matrix)
 
-    check = mtc.iprod(g, n_mani, center)
-    nrm = jnp.where(check < 0, -n_mani, n_mani)
-    return unitize(g, nrm)
+    check = jnp.where(deter > 0.0, 1.0, -1.0)
+
+    nmat = matrix[:, rank:] * check
+
+    return nmat[:, rank:], rank
 
 @jax.jit
-def xnormal(g: Matrix, basis: Tensor) -> Matrix | Tensor: 
-    return jax.vmap(normal, in_axes=(None, 0))(g, basis)
+def vnrm(g: Matrix, basis: Matrix) -> Matrix:
+
+    Q, R = jnp.linalg.qr(basis.T, mode='complete')
+    rank = jnp.linalg.matrix_rank(basis)
+
+    r_norm = jnp.linalg.solve(g, Q)
+
+    matrix = xunitize(g, r_norm)
+    
+    deter = jnp.linalg.det(matrix)
+
+    check = jnp.where(deter > 0.0, 1.0, -1.0)
+
+    nmat = matrix[:, rank:] * check
+
+    return nmat[:, rank:], rank
+
+
+@jax.jit
+def xpnrm(g: Matrix, basis: Tensor) -> Matrix | Tensor: 
+    return jax.vmap(pnrm, in_axes=(0, 0))(g, basis)
+
+@jax.jit
+def xvnrm(g: Matrix, basis: Tensor) -> Matrix | Tensor: 
+    return jax.vmap(vnrm, in_axes=(0, 0))(g, basis)
 
 #dot product territory
 @jax.jit
@@ -73,5 +95,6 @@ def xrejvect(g: Matrix, a: Matrix, b: Matrix) -> Matrix:
 def unitize(g: Matrix, u: Vector) -> Vector: 
     return us.div(u, mtc.norm(g, u))
 
-def goonmaster(al: str):
-    return print(al)
+@jax.jit
+def xunitize(g: Matrix, u: Matrix) -> Matrix: 
+    return jax.vmap(unitize, in_axes=(None, 0))(g, u)

@@ -3,7 +3,8 @@ from .topology import (linlen,
  pldist, xpldist, 
 )
 
-from .vectors import (normal, xnormal,
+from .vectors import (pnrm, vnrm,
+xpnrm, xvnrm,
  scalproj, xscalproj, 
 vectproj, xvectproj, 
  rejvect, xrejvect)

@@ -11,48 +11,47 @@ from numba import njit, prange
 import time
 
 
-def randomized_svd(A, rank, oversample=5):
-    """
-    Computes a truncated SVD using a randomized algorithm.
-    """
-    m, n = A.shape
-    # 1. Generate a random Gaussian matrix
-    P = np.random.randn(n, rank + oversample)
-    
-    # 2. Form the sample matrix Z and orthonormalize it
-    Z = A @ P
-    Q, _ = np.linalg.qr(Z)
-    
-    # 3. Project A into the smaller subspace
-    Y = Q.T @ A
-    
-    # 4. Perform standard SVD on the much smaller matrix Y
-    U_tilde, Sigma, Vt = np.linalg.svd(Y, full_matrices=False)
-    
-    # 5. Project the left singular vectors back to the original space
-    U = Q @ U_tilde
-    
-    return U[:, :rank], Sigma[:rank], Vt[:rank, :]
+D = 10  # 10 Dimensions
+N_BATCH = 10000  # 10,000 separate manifolds
 
-# Setup: Large noisy dataset (e.g., 5000 points in 500 dimensions)
-rows, cols = 5000, 500
-target_rank = 10 
-data = np.random.randn(rows, cols)
+# 1. Create a "Hellish" Metric Batch
+# Some dimensions are massive (crushing gravity), some are tiny (stretched void)
+diag_vals = jnp.array([1e6, 1e-6, 1.0, 50.0, 0.01, 1e3, 1e-3, 2.0, 0.5, 1.0])
+batch_g = jnp.tile(jnp.diag(diag_vals), (N_BATCH, 1, 1))
 
-# Benchmark Standard SVD
+# 2. Create "Cruel" Basis Vectors
+# v1 and v2 are almost identical (Difference of 1e-9)
+v1 = jnp.zeros(D).at[0].set(1.0)
+v2 = jnp.zeros(D).at[0].set(1.0).at[1].set(1e-9) 
+batch_basis = jnp.tile(jnp.stack([v1, v2]), (N_BATCH, 1, 1))
+
+
+# --- EXECUTION & TIMING ---
+print(f"🔥 Sending {N_BATCH} manifolds to hell (10D)...")
+
+# Warm-up (Compile time)
+_ = vct.xvnrm(batch_g[0:1], batch_basis[0:1])
+
 start = time.time()
-U_full, S_full, V_full = np.linalg.svd(data, full_matrices=False)
-t_full = time.time() - start
+# The Real Run
+frames, ranks = vct.xvnrm(batch_g, batch_basis)
+# Ensure JAX actually finishes before we stop the clock
+jax.block_until_ready(frames) 
+end = time.time()
 
-# Benchmark Randomized SVD
-start = time.time()
-U_rand, S_rand, V_rand = randomized_svd(data, target_rank)
-t_rand = time.time() - start
+# --- THE RESULTS ---
+print(f"⏱️ Time taken: {end - start:.4f} seconds")
+print(f"🚀 Speed: {N_BATCH / (end - start):.0f} manifolds/sec")
 
-# Accuracy check: Comparing the first singular value
-error = np.abs(S_full[0] - S_rand[0]) / S_full[0]
+# Check the hardest one (The first one)
+# Tangent space should be rank 2, Normal space should be rank 8
+normal_basis = frames[0][:, ranks[0]:]
+tangent_basis = frames[0][:, :ranks[0]]
 
-print(f"Standard SVD Time: {t_full:.4f}s")
-print(f"Randomized SVD Time: {t_rand:.4f}s")
-print(f"Speedup: {t_full / t_rand:.2f}x")
-print(f"Relative Error (Top Singular Value): {error:.2e}")
+# Cruel Orthogonality Check: t^T @ g @ n
+# Even in 10D with a 1e6 metric, this should be tiny
+test_val = tangent_basis.T @ batch_g[0] @ normal_basis
+max_err = jnp.max(jnp.abs(test_val))
+
+print(f"Detected Rank: {ranks[0]}")
+print(f"Max Orthogonality Error in Hell: {max_err:.2e}")
