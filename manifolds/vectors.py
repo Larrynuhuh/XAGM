@@ -6,7 +6,24 @@ from geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
 
 from basis import metrics as mtc
 
+@jax.jit
+def nrm(g: Matrix, basis: Matrix) -> Matrix:
 
+    vals, vecs = jnp.linalg.eigh(g)
+
+    L = jnp.sqrt(vals)[:, None] * vecs.T 
+    bflat = basis @ L.T 
+
+    Q, R = jnp.linalg.qr(bflat.T) 
+    linvt = vecs/jnp.sqrt(vals) 
+
+    ortho = Q.T @ linvt.T 
+    det = jnp.linalg.det(ortho @ L.T) > 0 
+    check = jnp.where(det, 1.0, -1.0) 
+    
+    northo = ortho.at[0, :].multiply(check) 
+
+    return northo
 
 #dot product territory
 @jax.jit
