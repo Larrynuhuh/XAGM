@@ -11,11 +11,5 @@ from numba import njit, prange
 import time
 
 
-g = jnp.array([
-    [1.0, 0.999999],
-    [0.999999, 1.0]
-])
 
-basis = jnp.eye(2)
-
-print(vct.nrm(g, basis))
+    

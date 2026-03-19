@@ -9,13 +9,14 @@ from basis import metrics as mtc
 @jax.jit
 def nrm(g: Matrix, basis: Matrix) -> Matrix:
 
-    vals, vecs = jnp.linalg.eigh(g)
+    nvals, vecs = jnp.linalg.eigh(g)
+    vals = jnp.maximum(nvals, 0.0)
 
     L = jnp.sqrt(vals)[:, None] * vecs.T 
     bflat = basis @ L.T 
 
     Q, R = jnp.linalg.qr(bflat.T) 
-    linvt = us.div(vecs, jnp.maximum(jnp.sqrt(vals), 0.0))
+    linvt = us.div(vecs, jnp.sqrt(vals))
 
     ortho = Q.T @ linvt.T 
     det = jnp.linalg.det(ortho @ L.T) > 0 
