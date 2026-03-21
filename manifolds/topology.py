@@ -24,7 +24,7 @@ def segdist(g: Matrix, f, h, pt):
     tc = jnp.clip(t, 0, 1)
 
     cp = f + tc * v
-    dist = mtc.norm_sq(g, pt - cp)
+    dist = mtc.norm(g, pt - cp)
 
     return dist
 
@@ -37,9 +37,4 @@ def pldist(g: Matrix, l: Matrix, pt: Vector) -> Scalar:
     curve_dist = jax.vmap(segdist, in_axes = (None, 0, 0, None))
     summed = curve_dist(g, a, b, pt)
 
-    final = jnp.min(summed)
-
-    return jnp.sqrt(final)
-
-
-
+    return jnp.min(summed)
