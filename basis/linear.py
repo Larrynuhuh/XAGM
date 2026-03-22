@@ -2,6 +2,7 @@ import geoutils as us
 import jax 
 import jax.numpy as jnp
 from geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
+from basis import metrics as mtc
 
 def grid(idx: JAXArray, dimens: tuple):
     fg = jnp.unravel_index(idx, dimens)
@@ -18,9 +19,6 @@ def line(p1: Vector, p2: Vector, segs: int) -> Matrix:
 
     return l
 
-static_argnums = (2,)
-def xline(p1: Matrix, p2: Matrix, segs: int) -> Tensor:
-    return jax.vmap(line, in_axes = (0, 0, None))(p1, p2, segs)
 
 def polyline(pl: Matrix) -> Tensor:
     a = pl[:-1]
@@ -30,5 +28,13 @@ def polyline(pl: Matrix) -> Tensor:
     return c
 
 
-def xpolyline(pl: Tensor) -> Tensor: 
-    return jax.vmap(polyline, in_axes = (0,))
+def ang(g: Matrix, u: Vector, v: Vector) -> Scalar:
+
+    numerator = mtc.iprod(g, u, v)
+    den1 = mtc.norm(g, u)
+    den2 = mtc.norm(g, v)
+
+    angle = us.div(numerator, (den1 * den2))
+    safe_cos = jnp.clip(angle, -1.0, 1.0)
+    
+    return jnp.arccos(safe_cos)

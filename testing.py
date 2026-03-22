@@ -10,4 +10,3 @@ from manifolds import topology as tpg
 from numba import njit, prange
 import time
 
-
