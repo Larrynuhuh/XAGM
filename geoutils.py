@@ -3,7 +3,7 @@ from jax import config
 
 import os
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
-#config.update("jax_enable_x64", True)
+config.update("jax_enable_x64", True)
 
 import jax
 import jax.numpy as jnp

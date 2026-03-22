@@ -60,3 +60,5 @@ def metinterp(g0: Matrix, v0: Vector,
     ig = jnp.einsum('ik, k, jk -> ij', intvecs, ival, intvecs)
 
     return ig
+
+
