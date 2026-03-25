@@ -8,7 +8,7 @@ from basis import metrics as mtc
 def linlen(g: Matrix, l: Matrix) -> Scalar:
     
     diff = jnp.diff(l, axis = 0)
-    lens = mtc.xnorm(g, diff)
+    lens = jax.vmap(mtc.norm, in_axes=(None, 0))(g, diff)
     sums = jnp.sum(lens)
 
     return sums 

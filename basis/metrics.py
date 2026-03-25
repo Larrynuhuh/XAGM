@@ -62,3 +62,7 @@ def metinterp(g0: Matrix, v0: Vector,
     return ig
 
 
+def metfield(v: Vector) -> Matrix:
+    return 
+
+
