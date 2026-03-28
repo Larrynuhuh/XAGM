@@ -20,13 +20,6 @@ def line(p1: Vector, p2: Vector, segs: int) -> Matrix:
     return l
 
 
-def polyline(pl: Matrix) -> Tensor:
-    a = pl[:-1]
-    b = pl[1:]
-    c = jnp.stack([a, b], axis = 1)
-
-    return c
-
 
 def ang(g: Matrix, u: Vector, v: Vector) -> Scalar:
 
