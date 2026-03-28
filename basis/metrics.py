@@ -11,7 +11,7 @@ def iprod(g: Matrix, u: Vector|Matrix, v: Vector|Matrix) -> Vector:
     return jnp.einsum('...i, ...ij, ...j -> ...', u, g, v)
 
 def norm(g: Matrix, u: Vector) -> Scalar: 
-    return jnp.sqrt(jnp.maximum(iprod(g, u, u), 0.0))
+    return jnp.sqrt(jnp.maximum(iprod(g, u, u), 1e-16))
 
 
 static_argnums = (0,)
@@ -28,7 +28,7 @@ def revmet(f, v: Vector) -> Matrix:
 
 def metinv(g: Matrix) -> Matrix:
     vals, vecs = jnp.linalg.eigh(g)
-    inv_vals = us.div(1.0, vals)
+    inv_vals = us.div(1.0, jnp.maximum(vals, 1e-12))
     met = jnp.einsum('ik, k, jk -> ij', vecs, inv_vals, vecs)
 
     return met
