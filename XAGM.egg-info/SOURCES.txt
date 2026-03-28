@@ -11,5 +11,4 @@ basis/__init__.py
 basis/linear.py
 basis/metrics.py
 manifolds/__init__.py
-manifolds/topology.py
 manifolds/vectors.py
