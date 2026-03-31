@@ -11,7 +11,9 @@ def christoffel(func, x: Vector) -> Matrix:
     ginv = mtc.metinv(g)
     mtc_func = lambda v: mtc.fwdmet(func, v)
 
-    dg = jax.jacfwd(mtc_func)(x)
+    __,dg_raw = jax.vmap(lambda v: jax.jvp(mtc_func, (x,), (v,)))(jnp.eye(x.shape[0]))
+
+    dg = jnp.moveaxis(dg_raw, 0, -1)
 
     term1 = jnp.transpose(dg, axes=[1, 2, 0])
     term2 = jnp.transpose(dg, axes=[0, 1, 2])
