@@ -1,10 +1,10 @@
-XAGM stands for Experimental Algebraic Geometry Multi-dimensional. What I mean by that is that this is a tool which heavily uses linear algebra to compute abstract multi-dimensional spaces, vectors, and points and so on in geometry.It is written completely in JAX to ensure differentiability too.
+XAGM is a Riemannian Differentiable Geometry engine which stands for Accelerated Autodiff Geometry Multi-dimensional. It deals exclusively in Riemannian SPD metrics, and it is MANDATORY the metrics are Symmetric Positive Definite (SPD) for it to work.
+It offers a vast array of functions, with 4 modules to call upon, them being metrics, linear, vectors, and calc. Vectors deal mainly with linear algebra adjacent functions with respect to the metric tensor. Speaking of the metric tensor, XAGM allows you to use fwdmet to create a pullback metric. 
 
-The main pillars of this project on which it was built are:
-1) n-dimensionality, the abiltity to perform any and all functions in higher dimensions with ease.
-2) abstraction, which means that this project is not afraid to be abstract and dense with mathematics. It's core ability is differentiability, provided by JAX.
-3) Differentiability, as mentioned above, this ensures that whatever you do with XAGM, it can easily be differentiated too and work seamlessly with the JAX ecosystem.
+The crown jewels of XAGM would be christoffel(), geoexp_solver(), geolog_solver(), and geodist(), with geoexp_solver consistently performing at sub millisecond speeds, and geolog_solver being in the comfortable range of 2-20ms each run depending on how many steps are given to the solver. 
 
-As a main conclusion, the whole point of XAGM is that it can't solve every and any problem. It can just help you a ton to do the mathematical heavy weight stuff so you can focus on actually designing your model. 
+XAGM has been benchmarked (quite unofficially so you are free to do your own runtime checks) and observed to outperform basically every other geometry application in numpy and the dominating Geometry powerhouses. You are highly encouraged, however, to confirm that yourself too. 
+
+XAGM is a bit hard to use at first since it expects a decent background in maths for most of the functions and a clear understanding of how to use JAX native functions like vmap and jit along with static_argnums and static_argnames, but, overall, if you behave nicely and pass clean arrays into it, it will reward you. Documentation on this project will be coming soon! (or never at all. No in between.)
 
 
