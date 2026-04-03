@@ -11,77 +11,72 @@ import geoutils as us
 from numba import njit, prange
 import time
 
-def torus_mapping(params):
+
+def pseudosphere_mapping(params):
     u, v = params
-    R, r = 2.0, 0.5
-    return jnp.array([
-        (R + r * jnp.cos(u)) * jnp.cos(v),
-        (R + r * jnp.cos(u)) * jnp.sin(v),
-        r * jnp.sin(u)
-    ])
+    # u is the 'height', v is the 'angle'
+    # Curvature is -1 everywhere, but it's a 'horn' shape
+    sech_u = 1.0 / jnp.cosh(u)
+    x = sech_u * jnp.cos(v)
+    y = sech_u * jnp.sin(v)
+    z = u - jnp.tanh(u)
+    return jnp.array([x, y, z])
 
 
-def sphere_mapping(params):
-    u, v = params
-    return jnp.array([jnp.sin(u) * jnp.cos(v), jnp.sin(u) * jnp.sin(v), jnp.cos(u)])
-
-
-def run_final_comparison(p, v_true, mapping):
-    # JIT the solvers
-    fast_exp = jax.jit(calc.geoexp_solver, static_argnums=(2,))
-    fast_log = jax.jit(calc.geolog_solver, static_argnums=(2, 3))
-
-    # --- Warmup (Compilation) ---
-    print("Compiling XLA Graphs...")
-    q_target, _ = fast_exp(p, v_true, mapping)
-    _ = fast_log(p, q_target, mapping, 5)
+def run_pseudosphere_audit():
+    # Setup Points
+    p = jnp.array([1.0, 0.0])      # Start at height 1.0
+    v_true = jnp.array([0.5, 0.2]) # Initial shot
+    w_init = jnp.array([1.0, 1.0]) # Vector to transport
     
-    # --- Benchmark Exponential Map (The Shot) ---
-    iters = 100
-    start = time.perf_counter()
+    # JIT Compile (Warmup)
+    fast_exp = jax.jit(calc.geoexp_solver, static_argnums=(2, 4))
+    fast_log = jax.jit(calc.geolog_solver, static_argnums=(2, 3))
+    
+    print("🚀 Compiling XLA Graphs for Pseudosphere...")
+    q_target, _, _ = fast_exp(p, v_true, pseudosphere_mapping, w_init, 8192)
+    _ = fast_log(p, q_target, pseudosphere_mapping, 5)
+
+    # --- BENCHMARK 1: EXPONENTIAL MAP ---
+    iters = 50
+    t0 = time.perf_counter()
     for _ in range(iters):
-        # We need the pos and vel for the drift check
-        pos, vel = fast_exp(p, v_true, mapping)
+        pos, vel, _ = fast_exp(p, v_true, pseudosphere_mapping, w_init, 8192)
         pos.block_until_ready()
-    t_exp = (time.perf_counter() - start) / iters * 1000
+    t_exp = (time.perf_counter() - t0) * 1000 / iters
 
-    # Accuracy check for ExpMap (Drift)
-    g_start = mtc.fwdmet(mapping, p)
-    g_end = mtc.fwdmet(mapping, pos)
-    len_0 = jnp.sqrt(jnp.dot(v_true, jnp.dot(g_start, v_true)))
-    len_1 = jnp.sqrt(jnp.dot(vel, jnp.dot(g_end, vel)))
-    drift = jnp.abs(len_0 - len_1)
+    # Accuracy: Metric Energy Conservation
+    g_p = mtc.fwdmet(pseudosphere_mapping, p)
+    g_q = mtc.fwdmet(pseudosphere_mapping, pos)
+    len_p = jnp.sqrt(jnp.einsum('i,ij,j', v_true, g_p, v_true))
+    len_q = jnp.sqrt(jnp.einsum('i,ij,j', vel, g_q, vel))
+    drift = jnp.abs(len_p - len_q)
 
-    # --- Benchmark Logarithmic Map (The Find) ---
-    start = time.perf_counter()
+    # --- BENCHMARK 2: LOGARITHMIC MAP ---
+    t1 = time.perf_counter()
     for _ in range(iters):
-        v_found = fast_log(p, q_target, mapping, 5)
+        v_found = fast_log(p, q_target, pseudosphere_mapping, 5)
         v_found.block_until_ready()
-    t_log = (time.perf_counter() - start) / iters * 1000
-
-    # Accuracy check for LogMap (Reconstruction)
+    t_log = (time.perf_counter() - t1) * 1000 / iters
     log_error = jnp.linalg.norm(v_found - v_true)
 
-    # --- 2. THE RESULTS ---
-    print(f"\n--- XAGM PERFORMANCE AUDIT ---")
-    print(f"Surface: Torus (Variable Curvature)")
+    # --- BENCHMARK 3: PARALLEL TRANSPORT ---
+    # Transporting a separate vector W along the geodesic
+    _, _, w_final = fast_exp(p, v_true, pseudosphere_mapping, w_init, 8192)
     
-    print(f"\n[EXPONENTIAL MAP]")
-    print(f"Runtime:  {t_exp:.4f} ms")
-    print(f"Accuracy: {drift:.2e} (Metric Drift)")
+    # Norm Conservation Check: ||W(0)||_gp == ||W(1)||_gq
+    norm_w_p = jnp.sqrt(jnp.einsum('i,ij,j', w_init, g_p, w_init))
+    norm_w_q = jnp.sqrt(jnp.einsum('i,ij,j', w_final, g_q, w_final))
+    trans_drift = jnp.abs(norm_w_p - norm_w_q)
 
-    print(f"\n[LOGARITHMIC MAP]")
-    print(f"Runtime:  {t_log:.4f} ms")
-    print(f"Accuracy: {log_error:.2e} (Vector Error)")
+    print(f"\n--- XAGM PSEUDOSPHERE FINAL AUDIT ---")
+    print(f"EXP + TRANSPORT RUNTIME: {t_exp:.4f} ms")
+    print(f"ENERGY DRIFT (EXP):     {drift:.2e}")
+    
+    print(f"\nLOGMAP RUNTIME (5 STEP): {t_log:.4f} ms")
+    print(f"VECTOR RECOVERY ERROR:   {log_error:.2e}")
+    
+    print(f"\nTRANSPORT NORM DRIFT:    {trans_drift:.2e}")
+    print(f"STATUS: {'✅ ACCURATE ASF' if trans_drift < 1e-9 else '❌ DRIFT DETECTED'}")
 
-    print(f"\n[EFFICIENCY RATIO]")
-    # How many ExpMaps fit into one LogMap?
-    ratio = t_log / t_exp
-    print(f"1 LogMap ≈ {ratio:.1f} ExpMaps")
-    print(f"Theoretical Cost: ~15x (5 Newton steps * (1 shoot + 2 partials))")
-    print(f"Observed geodesic distance: {calc.geodist(p, q_target, mapping, 5):.4f}")
-
-# Run it
-p_test = jnp.array([0.1, 0.1])
-v_test = jnp.array([0.4, 0.2])
-run_final_comparison(p_test, v_test, torus_mapping)
+run_pseudosphere_audit()
