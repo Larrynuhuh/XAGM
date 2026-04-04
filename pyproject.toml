@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "XAGM"
+name = "xagm"
 version = "0.1.1"
 dependencies = [
     "jax", "jaxlib", "jaxtyping"
@@ -11,8 +11,8 @@ dependencies = [
 readme = "README.md"
 # Add any dependencies you need here, e.g., ["jax", "jaxlib"]
 
-[tool.setuptools]
-# 1. Explicitly list the folders that are Python packages
-packages = ["manifolds", "basis"]
-py-modules = ["geoutils", "testing"]
+[tool.setuptools.packages.find]
+# This tells setuptools to look for your code inside the 'src' folder
+where = ["src"]
 
+[tool.setuptools]
