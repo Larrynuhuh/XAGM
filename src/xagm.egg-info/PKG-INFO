@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: xagm
-Version: 0.1.6
+Version: 0.1.7
 Description-Content-Type: text/markdown
 Requires-Dist: jax
 Requires-Dist: jaxlib
