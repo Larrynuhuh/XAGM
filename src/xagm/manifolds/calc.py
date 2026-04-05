@@ -58,9 +58,9 @@ def geoexp_solver(p: Vector, v: Vector, mapped_func, vt: Vector, steps = 4096) -
         dt0=1e-2,
         y0=state,
         args = {'func': mapped_func},
-        stepsize_controller = diffrax.PIDController(rtol=1e-8, atol=1e-10),
+        stepsize_controller = diffrax.PIDController(rtol=1e-7, atol=1e-9),
         saveat=diffrax.SaveAt(t1=True),
-        adjoint = diffrax.DirectAdjoint(),
+        adjoint = diffrax.ImplicitAdjoint(),
         max_steps = steps,
         throw = False
     )
@@ -86,7 +86,8 @@ def geolog_solver(p: Vector, q: Vector, mapped_func, steps: int) -> Vector:
     def bodyfun(i, v):
         error = shoot(v) - q
         #J = jax.jacobian(shoot)(v)
-        delta = jnp.linalg.solve(J, error)
+        #delta = jnp.linalg.solve(J, error)
+        delta = jnp.linalg.lstsq(J, error, rcond=1e-12)[0]
         return v - delta
 
     final_v = jax.lax.fori_loop(0, steps, bodyfun, v)
@@ -98,6 +99,5 @@ def geodist(p: Vector, q: Vector, mapped_func, steps: int) -> Scalar:
     g = mtc.fwdmet(mapped_func, p)
     dist = mtc.norm(g, v)
     return dist
-
 
 
