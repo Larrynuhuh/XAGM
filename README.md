@@ -8,3 +8,8 @@ XAGM has been benchmarked (quite unofficially so you are free to do your own run
 XAGM is a bit hard to use at first since it expects a decent background in maths for most of the functions and a clear understanding of how to use JAX native functions like vmap and jit along with static_argnums and static_argnames, but, overall, if you behave nicely and pass clean arrays into it, it will reward you. Documentation on this project will be coming soon! (or never at all. No in between.)
 
 
+|| INSTALLATION ||
+
+Installing it is rather easy, simple type:
+pip install xagm
+in your terminal. That'll be enough, the dependencies shall be downloaded alongside it. 
