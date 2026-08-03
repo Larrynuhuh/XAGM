@@ -6,18 +6,36 @@ from xagm.geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
 from xagm.basis import metrics as mtc
 
 def christoffel_kind1(func, x: Vector) -> Matrix:
-    ...
+    __,dg_raw = jax.vmap(lambda v: jax.jvp(lambda v: mtc.fwdmet(func, v), (x,), (v,)))(jnp.eye(x.shape[0]))
+    dg = jnp.moveaxis(dg_raw, 0, -1)
+
+    term1 = jnp.transpose(dg, axes=[1, 2, 0])
+    term2 = jnp.transpose(dg, axes=[0, 1, 2])
+    term3 = jnp.transpose(dg, axes=[2, 0, 1])
+    contract1 = term1 + term2 - term3
+    
+    gamma = 0.5 * jnp.einsum('kij -> kij', contract1)
+    return gamma
 
 def christoffel_kind2(func, x: Vector) -> Matrix:
     
     g = mtc.fwdmet(func, x)
     ginv = mtc.metinv(g)
-    dg = jax.jacfwd(func)(x) #shape is ijm
+    mtc_func = lambda v: mtc.fwdmet(func, v)
 
-    gamma = jnp.einsum('km, mji -> kij', ginv, jnp.einsum('ijm -> jmi', dg) + jnp.einsum('ijm -> imj', dg)
-     - jnp.einsum('ijm -> mij', dg)) * 0.5
+    __,dg_raw = jax.vmap(lambda v: jax.jvp(mtc_func, (x,), (v,)))(jnp.eye(x.shape[0]))
 
-    return gamma
+    dg = jnp.moveaxis(dg_raw, 0, -1)
+
+    term1 = jnp.transpose(dg, axes=[1, 2, 0])
+    term2 = jnp.transpose(dg, axes=[0, 1, 2])
+    term3 = jnp.transpose(dg, axes=[2, 0, 1])
+
+    contract1 = 0.5 * ginv
+    contract2 = term1 + term2 - term3
+    gamma = jnp.einsum('kl, lij -> kij', contract1, contract2)
+
+    return gamma 
 
 import diffrax
 
