@@ -2,8 +2,10 @@ from xagm import geoutils as us
 import jax 
 import jax.numpy as jnp
 from xagm.geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
-
+from xagm.basis import linear as lin
 from xagm.basis import metrics as mtc
+import diffrax
+import optax
 
 def christoffel_kind1(func, x: Vector) -> Matrix:
     __,dg_raw = jax.vmap(lambda v: jax.jvp(lambda v: mtc.fwdmet(func, v), (x,), (v,)))(jnp.eye(x.shape[0]))
@@ -37,8 +39,6 @@ def christoffel_kind2(func, x: Vector) -> Matrix:
 
     return gamma 
 
-import diffrax
-
 
 def geoexp_term(t, state, args) -> Vector:
     dim = state.shape[0] // 3
@@ -58,7 +58,7 @@ def geoexp_term(t, state, args) -> Vector:
     return jnp.concatenate([v, v_dot, dvecdt])
 
 
-def geoexp_solver(p: Vector, v: Vector, mapped_func, vt: Vector, steps = 4096) -> Vector:
+def expm(p: Vector, v: Vector, mapped_func, vt: Vector, steps: int = 4096) -> Vector:
 
     state = jnp.concatenate([p, v, vt])
 
@@ -86,30 +86,49 @@ def geoexp_solver(p: Vector, v: Vector, mapped_func, vt: Vector, steps = 4096) -
 
     return final_pos, final_vel, transported_v
 
-def geolog_solver(p: Vector, q: Vector, mapped_func, steps: int) -> Vector:
-    
-    def shoot(v_guess):
-        pos, _, _ = geoexp_solver(p, v_guess, mapped_func, jnp.zeros_like(p))
-        return pos
+@jax.jit(static_argnames=('mapped_func', 'segments', 'steps'))
+def shooting_logic(p: Vector, q: Vector, mapped_func, segments: int, steps: int = 4096) -> Vector:
+    dt = 1.0 / segments
+    init_path = lin.line(p, q, segments + 1)
+    init_vel = (init_path[1:] - init_path[:-1]) / dt
+    params = {'inner_points': init_path[1:-1], 'vels': init_vel}
 
-    v = q-p
-    J = jax.jacobian(shoot)(v)
+    padded_path = jnp.vstack([p, params['inner_points'], q])
+    pos, vel, __ = jax.vmap(expm, in_axes=(0, 0, None, 0, None))(padded_path[:-1], dt * params['vels'],
+    mapped_func, jnp.zeros_like(p), 512)
 
-    def bodyfun(i, v):
-        error = shoot(v) - q
-        #J = jax.jacobian(shoot)(v)
-        #delta = jnp.linalg.solve(J, error)
-        delta = jnp.linalg.lstsq(J, error, rcond=1e-12)[0]
-        return v - delta
+    pos_err = jnp.sum((pos - padded_path[1:])**2)
+    vel_err = jnp.sum(((vel/dt)[:-1] - params['vels'][1:])**2)
+    return pos_err + vel_err
 
-    final_v = jax.lax.fori_loop(0, steps, bodyfun, v)
-    return final_v
+
+def logm(p: Vector, q: Vector, mapped_func, segments: int, steps: int = 4096) -> Vector:
+    dt = 1.0 / segments
+    init_path = lin.line(p, q, segments + 1)
+    init_vel = (init_path[1:] - init_path[:-1]) / dt
+    params = {'inner_points': init_path[1:-1], 'vels': init_vel}
+
+    optimizer = optax.adam(learning_rate = 1e-3)
+    opt_state = optimizer.init(params)
+
+    def loss_fn(carry, _):
+        current_params, current_state = carry
+        loss, grad = jax.value_and_grad(shooting_logic)(p, q, mapped_func, segments, steps)
+
+        updates, new_opt_state = optimizer.update(grad, current_state, current_params)
+        new_params = optax.apply_updates(current_params, updates)
+
+        return (new_params, new_opt_state), loss
+
+    state = (params, opt_state)
+    (final_params, final_opt_state), loss_trajectory = jax.lax.scan(loss_fn, state, None, length = steps)
+
+    logmap = final_params['vels'][0]
+    return logmap
 
 
 def geodist(p: Vector, q: Vector, mapped_func, steps: int) -> Scalar:
-    v = geolog_solver(p, q, mapped_func, steps)
+    v = expm(p, q, mapped_func, steps)
     g = mtc.fwdmet(mapped_func, p)
     dist = mtc.norm(g, v)
     return dist
-
-
