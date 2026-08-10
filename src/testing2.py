@@ -1,239 +1,197 @@
-import jax
-import jax.numpy as jnp
 import xagm
+from xagm.manifolds import vectors as vct
+from xagm.manifolds import calc
 from xagm.basis import metrics as mtc
-from xagm.manifolds import calc 
-import numpy as np
-import time
-from jax.tree_util import Partial
-import equinox as eqx
-
-def hyperbolic_immersion(coord):
-    """An immersion mapping whose Euclidean metric pullback matches 1/y^2."""
-    x, y = coord[0], coord[1]
-    # We apply log operations to match the 1/y scaling behavior under jacfwd
-    return jnp.array([x / y, jnp.log(y), 1.0 / y])
-
-def paraboloid_immersion(coord):
-    """Maps polar manifold coordinates (r, theta) onto a 3D paraboloid surface."""
-    r, theta = coord[0], coord[1]
-    return jnp.array([
-        r * jnp.cos(theta),
-        r * jnp.sin(theta),
-        r**2
-    ])
-
-import time
+from xagm.basis import linear as lin
 import jax
 import jax.numpy as jnp
+import time
 
-# Enforce x64 tracking
-jax.config.update("jax_enable_x64", True)
 
-import jax
-import jax.numpy as jnp
-import diffrax
-import optimistix
-
-# --- 1. THE ISOMETRIC EMBEDDING (The "Function Thingy") ---
-def sphere_embedding(coord):
-    """Maps spherical coordinates (theta, phi) into 3D Euclidean space."""
-    theta, phi = coord[0], coord[1]
+def stereographic_embedding(params):
+    u, v = params
+    denom = 1 + u**2 + v**2
     return jnp.array([
-        jnp.sin(theta) * jnp.cos(phi),
-        jnp.sin(theta) * jnp.sin(phi),
-        jnp.cos(theta)
+        (2 * u) / denom,
+        (2 * v) / denom,
+        (u**2 + v**2 - 1) / denom
     ])
 
-def analytical_disk_logmap(p, q):
-    """Computes exact closed-form Riemann Log Map on the Poincaré Disk."""
-    # Distance in the Poincaré disk
-    u1, v1 = p[0], p[1]
-    u2, v2 = q[0], q[1]
-    
-    num = 2.0 * ((u1 - u2)**2 + (v1 - v2)**2)
-    den = (1.0 - (u1**2 + v1**2)) * (1.0 - (u2**2 + v2**2))
-    dist = jnp.acosh(1.0 + num / den)
-    
-    if dist < 1e-9:
-        return jnp.zeros_like(p)
-        
-    # Hyperbolic direction vector scaled back to the tangent space at p
-    # Uses the conformal scaling factor to project properly
-    conformal_factor = 2.0 / (1.0 - jnp.sum(p**2))
-    
-    # Standard translation identity in complex/hyperbolic space
-    # For a direct clean implementation:
-    diff = q - p
-    v_intrinsic = diff * (dist / (jnp.linalg.norm(diff) + 1e-12)) / conformal_factor
-    return v_intrinsic
 
-# Execution Points for Disk (Safely inside the unit disk)
-p_disk = jnp.array([0.1, -0.2])
-q_disk = jnp.array([-0.4, 0.5])
+def sphere_embedding(params):
+    u, v = params
+    return jnp.array([jnp.sin(u) * jnp.cos(v), jnp.sin(u) * jnp.sin(v), jnp.cos(u)])
 
-def saddle_embedding(coord):
-    """Maps coordinates (u, v) onto a 3D Saddle Surface."""
-    u, v = coord[0], coord[1]
+
+def inner_prod(v1, v2, metric):
+    return jnp.dot(v1, jnp.dot(metric, v2))
+
+def to_3d(p, v_coord):
+    jac = jax.jacobian(sphere_embedding)(p)
+    return jac @ v_coord
+
+def flat_embedding(params):
+    u, v = params
+    # Just a flat sheet at z = 0
+    return jnp.array([u, v, 0.0])
+
+def saddle_embedding(params):
+    u, v = params
+    return jnp.array([u, v, u**2 - v**2])
+
+@jax.jit
+def run_experiment(p, v, vt):
+    return calc.expm(p, v, saddle_embedding, vt)
+@jax.jit
+def metric_length(v, g):
+    return jnp.sqrt(jnp.dot(v, jnp.dot(g, v)))
+
+p_start = jnp.array([0.0, 0.0])
+path_vel = jnp.array([1.0, 1.0]) 
+v_to_transport = jnp.array([0.0, 1.0])
+# --- 1. COMPILE (The "i3 Workout") ---
+print("Compiling XLA Graph...")
+start_comp = time.time()
+_ = run_experiment(p_start, path_vel, v_to_transport)
+print(f"Compilation took: {time.time() - start_comp:.2f}s")
+
+# --- 2. EXECUTE (The "Hot Run") ---
+start_run = time.time()
+pos, vel, v_transported = run_experiment(p_start, path_vel, v_to_transport)
+duration = (time.time() - start_run) * 1000
+
+g_start = mtc.fwdmet(saddle_embedding, p_start)
+g_end = mtc.fwdmet(saddle_embedding, pos)
+
+# 2. Calculate the invariant lengths
+initial_len = metric_length(v_to_transport, g_start)
+final_len = metric_length(v_transported, g_end)
+
+# 3. Compute absolute drift error
+conservation_error = jnp.abs(final_len - initial_len)
+
+print("--- XAGM Mathematical Accuracy Test ---")
+print(f"Initial Metric Length: {initial_len:.8f}")
+print(f"Final Metric Length:   {final_len:.8f}")
+print(f"Absolute Drift Error:  {conservation_error:.2e}")
+
+# Interpretation
+if conservation_error < 1e-7:
+    print("✅ PASS: Geometric metric invariance is preserved!")
+else:
+    print("❌ FAIL: Vector length drifted. Check Christoffel contractions or solver step size.")
+
+initial_speed = metric_length(path_vel, g_start)
+final_speed = metric_length(vel, g_end)
+
+# Calculate kinetic energy drift
+geodesic_drift = jnp.abs(final_speed - initial_speed)
+
+print("\n--- Geodesic Verifier ---")
+print(f"Initial Path Speed: {initial_speed:.8f}")
+print(f"Final Path Speed:   {final_speed:.8f}")
+print(f"Geodesic Error:     {geodesic_drift:.2e}")
+
+if geodesic_drift < 1e-7:
+    print("🚀 CONFIRMED: Your geodesics are mathematically correct!")
+else:
+    print("⚠️ WARNING: Path velocity drifted. The solver is integrating the path incorrectly.")
+
+
+print(f"\n--- XAGM JIT Performance ---")
+print(f"Hot Runtime: {duration:.2f}ms")
+print(f"Final Vector: {v_transported}")
+
+vmapped_solver = jax.vmap(run_experiment, in_axes=(None, None, 0))
+
+# 2. Generate 100 random vectors to transport
+key = jax.random.PRNGKey(42)
+batch_vt = jax.random.normal(key, (100, 2))
+
+print(f"--- XAGM Vectorized Stress Test (100 Vectors) ---")
+
+# Warm-up compilation for the vmap version
+_ = vmapped_solver(p_start, path_vel, batch_vt)
+
+# Time the batched run
+start_vmap = time.time()
+pos_batch, vel_batch, vt_batch = vmapped_solver(p_start, path_vel, batch_vt)
+vmap_duration = (time.time() - start_vmap) * 1000
+
+print(f"Vmapped Hot Runtime: {vmap_duration:.2f}ms")
+print(f"Avg Time Per Vector: {vmap_duration/100:.4f}ms")
+print(f"Shape of Output:     {vt_batch.shape}")
+
+
+def funnel_embedding(params):
+    u, v = params
+    # u is radial distance, v is angle
+    # We'll add a small epsilon to u to avoid the log(0) at the very start
+    u_safe = jnp.abs(u) + 0.001 
     return jnp.array([
-        u,
-        v,
-        u**2 - v**2  # z = x^2 - y^2
+        u_safe * jnp.cos(v),
+        u_safe * jnp.sin(v),
+        jnp.log(u_safe)
     ])
-# Execution Points for Saddle Check
-p_saddle = jnp.array([0.0, 0.0])  # Origin saddle point
-q_saddle = jnp.array([1.2, -0.8]) # Displaced down the flares
-
-def run_extended_suite():
-    # --- RUN TEST 1: POINCARÉ DISK ---
-    print("\n--- TEST 1: POINCARÉ DISK MODEL ---")
-    # Swap out 'mtc' internally to use mtc_disk for this specific function run
-    # (Or temporarily point your core script's mtc.fwdmet to mtc_disk.fwdmet)
-    # --- EXECUTE TEST 1: POINCARÉ DISK MODEL --
-
-# Define our points safely inside the unit disk
-    p_disk = jnp.array([0.1, -0.2])
-    q_disk = jnp.array([-0.4, 0.5])
-
-    # Pass a dummy function since mtc_disk.fwdmet evaluates the metric entirely intrinsically
-    dummy_geometry = lambda x: x
-
-    # We must tell our engine to use mtc_disk.fwdmet for this specific call.
-    # Temporarily assign your riemannian_path_energy to use mtc_disk's metric:
-    def disk_path_energy(params: dict, args):
-        p, q, mapped_func = args
-        path = jnp.vstack([p, params['inner_points'], q])
-        dx = path[1:] - path[:-1]
-        midpoints = 0.5 * (path[1:] + path[:-1])
-        # Evaluating via the Poincaré intrinsic metric factor
-        g_matrices = jax.vmap(lambda x: mtc_disk.fwdmet(mapped_func, x))(midpoints)
-        segment_energies = jnp.einsum('ni, nij, nj -> n', dx, g_matrices, dx)
-        return jnp.sum(segment_energies)
-
-    # Run your production log map pointed to the Disk metric
-    print("Computing numerical log map across hyperbolic space...")
-    # (Make sure production_logm inside your script points to disk_path_energy for this test)
-    numerical_disk_log = calc.logm(p_disk, q_disk, dummy_geometry, segments = 40)
-
-    print("Computing exact analytical Poincaré closed form...")
-    analytical_disk_log = analytical_disk_logmap(p_disk, q_disk)
-
-    disk_error = jnp.linalg.norm(numerical_disk_log - analytical_disk_log)
-
-    print(f"Numerical Disk Vector:  {numerical_disk_log}")
-    print(f"Analytical Disk Vector: {analytical_disk_log}")
-    print(f"Absolute L2 Disk Error: {disk_error:.4e}")
-
-    if disk_error < 1e-8:
-        print("✅ SUCCESS: Hyperbolic boundary distortion conquered!")
-    else:
-        print("❌ FAILURE: Engine warped near the boundary.")
-
     
-    # --- RUN TEST 2: SADDLE EMBEDDING CLOSURE ---
-    print("\n--- TEST 2: SADDLE CLOSURE TEST ---")
-    static_saddle = Partial(saddle_embedding)
-    jitted_production_logm = eqx.filter_jit(calc.logm)
-    
-    print("Computing Log vector on Saddle...")
-    v_log_saddle = jitted_production_logm(p_saddle, q_saddle, static_saddle, 30)
-    
-    print("Shooting vector back via ExpMap to check alignment closure...")
-    # Map the vector back through your continuous ODE engine
-    q_reconstructed, _, _ = calc.expm(p_saddle, v_log_saddle, static_saddle, jnp.zeros_like(p_saddle), 512)
-    
-    closure_error = jnp.linalg.norm(q_reconstructed - q_saddle)
-    print(f"Original Target Q:      {q_saddle}")
-    print(f"Reconstructed Target Q: {q_reconstructed}")
-    print(f"Absolute Round-Trip Error: {closure_error:.4e}")
-    
-    if closure_error < 1e-7:
-        print("✅ SUCCESS: The log map matches the exact geometry of the saddle!")
-    else:
-        print("❌ FAILURE: Round-trip closure desynced.")
+p_start = jnp.array([5.0, 0.0])
+path_vel = jnp.array([-1.0, 0.5]) 
+v_to_transport = jnp.array([1.0, 0.0])
 
-run_extended_suite()
+print(f"Launching into the Funnel...")
 
-# --- 2. THE CORRECTED POINCARÉ DISK METRIC FUNCTION ---
-def poincare_disk_metric(x):
-    """Direct algebraic formula for the Poincaré disk metric tensor."""
-    r2 = jnp.sum(x**2)
-    factor = 4.0 / (1.0 - r2)**2
-    return jnp.eye(2) * factor
+# Warm-up / Compile
+_ = run_experiment(p_start, path_vel, v_to_transport) 
 
+start = time.time()
+pos, vel, v_trans = run_experiment(p_start, path_vel, v_to_transport)
+end = time.time()
 
-# --- 3. THE ISOLATED POINCARÉ DISK RUNNER ---
-def run_poincare_disk_test():
-    print("\n--- TEST 1: POINCARÉ DISK MODEL (FIXED) ---")
-    
-    p_disk = jnp.array([0.1, -0.2])
-    q_disk = jnp.array([-0.4, 0.5])
-    
-    # Create a localized version of your hybrid logm tailored for pure intrinsic metrics
-    def disk_production_logm(p, q, metric_func, segments=30):
-        # STAGE 1: Path straightener
-        init_path = jnp.linspace(p, q, segments + 1)
-        params = {'inner_points': init_path[1:-1]}
-        
-        def disk_energy(par, args):
-            path = jnp.vstack([p, par['inner_points'], q])
-            dx = path[1:] - path[:-1]
-            midpoints = 0.5 * (path[1:] + path[:-1])
-            g_matrices = jax.vmap(metric_func)(midpoints)
-            return jnp.sum(jnp.einsum('ni, nij, nj -> n', dx, g_matrices, dx))
-            
-        path_sol = optimistix.minimise(
-            fn=disk_energy, solver=optimistix.BFGS(rtol=1e-4, atol=1e-5),
-            y0=params, args=(), max_steps=200
-        )
-        
-        full_path = jnp.concatenate([p[None, :], path_sol.value['inner_points'], q[None, :]], axis=0)
-        rough_v_guess = (full_path[1] - p).ravel() * segments
-        
-        # Override the ODE terms to use our intrinsic Christoffel engine inside expm
-        def disk_geoexp_term(t, state, args):
-            dim = state.shape[0] // 2
-            x_loc, v_loc = state[:dim], state[dim:]
-            gamma = calc.christoffel_kind2(metric_func, x_loc)
-            v_dot = -jnp.einsum('kij, i, j -> k', gamma, v_loc, v_loc)
-            return jnp.concatenate([v_loc, v_dot])
-            
-        def disk_expm_simple(p_in, v_in):
-            state = jnp.concatenate([p_in, v_in])
-            sol = diffrax.diffeqsolve(
-                terms=diffrax.ODETerm(disk_geoexp_term), solver=diffrax.Tsit5(),
-                t0=0, t1=1, dt0=1e-2, y0=state,
-                stepsize_controller=diffrax.PIDController(rtol=1e-8, atol=1e-10),
-                saveat=diffrax.SaveAt(t1=True), max_steps=512, throw=False
-            )
-            return sol.ys[0, :p_in.shape[0]]
-            
-        # STAGE 2: Safe NelderMead Polisher
-        def disk_residual(v_g, args):
-            return disk_expm_simple(p, v_g) - q
-            
-        refinement = optimistix.minimise(
-            fn=lambda v, args: jnp.sum(disk_residual(v, args)**2),
-            solver=optimistix.NelderMead(rtol=1e-9, atol=1e-12),
-            y0=rough_v_guess, args=(), max_steps=300
-        )
-        return refinement.value
+print(f"Funnel Run took: {(end-start)*1000:.3f}ms")
+print(f"Final Position: {pos}")
+print(f"Transported Vector: {v_trans}")
 
-    # Execute
-    jitted_disk_logm = eqx.filter_jit(disk_production_logm)
-    numerical_disk_log = jitted_disk_logm(p_disk, q_disk, poincare_disk_metric, 30)
-    analytical_disk_log = analytical_disk_logmap(p_disk, q_disk)
-    
-    disk_error = jnp.linalg.norm(numerical_disk_log - analytical_disk_log)
-    
-    print(f"Numerical Disk Vector:  {numerical_disk_log}")
-    print(f"Analytical Disk Vector: {analytical_disk_log}")
-    print(f"Absolute L2 Disk Error: {disk_error:.4e}")
-    
-    if disk_error < 1e-8:
-        print("✅ SUCCESS: The pure intrinsic hyperbolic space has been conquered!")
-    else:
-        print("❌ FAILURE: Discretization trap or desync.")
-
-# Run the fixed disk test specifically
-run_poincare_disk_test()
+def monster_5d_embedding(params):
+    u1, u2, u3, u4, u5 = params
+    return jnp.array([
+        (2 + jnp.cos(u4)) * jnp.cos(u1),
+        (2 + jnp.cos(u4)) * jnp.sin(u1),
+        (2 + jnp.cos(u5)) * jnp.cos(u2),
+        (2 + jnp.cos(u5)) * jnp.sin(u2),
+        jnp.sin(u3) * jnp.exp(-0.1 * u1**2), # Add some decay to warp it
+        jnp.cos(u3) + u4 * 0.1             # Adding a slight "shear"
+    ])
+p_start = jnp.array([1.0, 1.0, 0.5, 0.0, 0.0]) # 5D Position
+path_vel = jnp.array([0.5, -0.2, 1.0, 0.1, -0.1]) # 5D Velocity
+v_to_transport = jnp.array([1.0, 0.0, 0.0, 0.0, 0.0]) # 5D Vector
+@jax.jit
+def run_5d_experiment(p, v, vt):
+    return calc.expm(p, v, monster_5d_embedding, vt, steps=512)
+print("Starting 5D Hyper-Manifold Test...")
+_ = run_5d_experiment(p_start, path_vel, v_to_transport)[0].block_until_ready()
+start = time.time()
+results = run_5d_experiment(p_start, path_vel, v_to_transport)
+_ = results[0].block_until_ready() 
+duration = (time.time() - start) * 1000
+print(f"5D REAL Hot Run: {duration:.3f}ms")
+print(f"Final 5D Position: {results[0]}")
+g_start = mtc.fwdmet(monster_5d_embedding, p_start)
+g_end = mtc.fwdmet(monster_5d_embedding, results[0]) # final position
+initial_speed = metric_length(path_vel, g_start)
+final_speed = metric_length(results[1], g_end)       # final velocity
+print(f"Initial 5D Speed: {initial_speed:.8f}")
+print(f"Final 5D Speed:   {final_speed:.8f}")
+print(f"Absolute Drift:   {jnp.abs(final_speed - initial_speed):.2e}")
+p_test = jnp.array([1.0, 1.0, 0.5, 0.0, 0.0])
+@jax.jit
+def get_symbols(p):
+    return calc.christoffel_kind2(monster_5d_embedding, p)
+# --- 1. COMPILE ---
+print("Compiling 5D Christoffel Tensor...")
+_ = get_symbols(p_test).block_until_ready()
+# --- 2. HOT RUN ---
+start = time.time()
+gamma = get_symbols(p_test).block_until_ready()
+duration = (time.time() - start) * 1000
+print(f"5D Christoffel Hot Runtime: {duration:.3f}ms")
+print(f"Tensor Shape: {gamma.shape}") # Should be (5, 5, 5)
