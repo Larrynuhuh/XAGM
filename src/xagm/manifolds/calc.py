@@ -86,9 +86,5 @@ def expm(p: Vector, v: Vector, mapped_func, vt: Vector, steps: int = 4096) -> Ve
     return final_pos, final_vel, transported_v
 
 
-def geodist(p: Vector, q: Vector, mapped_func, steps: int) -> Scalar:
-    v = expm(p, q, mapped_func, steps)
-    g = mtc.fwdmet(mapped_func, p)
-    dist = mtc.norm(g, v)
-    return dist
+
 

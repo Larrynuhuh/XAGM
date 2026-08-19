@@ -7,191 +7,170 @@ import jax
 import jax.numpy as jnp
 import time
 
-
-def stereographic_embedding(params):
-    u, v = params
-    denom = 1 + u**2 + v**2
-    return jnp.array([
-        (2 * u) / denom,
-        (2 * v) / denom,
-        (u**2 + v**2 - 1) / denom
-    ])
-
-
-def sphere_embedding(params):
-    u, v = params
-    return jnp.array([jnp.sin(u) * jnp.cos(v), jnp.sin(u) * jnp.sin(v), jnp.cos(u)])
-
-
-def inner_prod(v1, v2, metric):
-    return jnp.dot(v1, jnp.dot(metric, v2))
-
-def to_3d(p, v_coord):
-    jac = jax.jacobian(sphere_embedding)(p)
-    return jac @ v_coord
-
-def flat_embedding(params):
-    u, v = params
-    # Just a flat sheet at z = 0
-    return jnp.array([u, v, 0.0])
+import numpy as np
+import plotly.graph_objects as go
+import jax
+import jax.numpy as jnp
 
 def saddle_embedding(params):
     u, v = params
     return jnp.array([u, v, u**2 - v**2])
 
-@jax.jit
-def run_experiment(p, v, vt):
-    return calc.expm(p, v, saddle_embedding, vt)
-@jax.jit
-def metric_length(v, g):
-    return jnp.sqrt(jnp.dot(v, jnp.dot(g, v)))
+# =====================================================================
+# 1. TEXTBOOK GRID EMBEDDING GENERATION
+# =====================================================================
 
-p_start = jnp.array([0.0, 0.0])
-path_vel = jnp.array([1.0, 1.0]) 
-v_to_transport = jnp.array([0.0, 1.0])
-# --- 1. COMPILE (The "i3 Workout") ---
-print("Compiling XLA Graph...")
-start_comp = time.time()
-_ = run_experiment(p_start, path_vel, v_to_transport)
-print(f"Compilation took: {time.time() - start_comp:.2f}s")
+# Generate smooth grid evaluation points for the surface
+# 45x45 resolution creates perfectly spaced, clean geometric "chops"
+u_vals = np.linspace(-1.5, 1.5, 45)
+v_vals = np.linspace(-1.5, 1.5, 45)
+U, V = np.meshgrid(u_vals, v_vals)
+X, Y, Z = U, V, U**2 - V**2
 
-# --- 2. EXECUTE (The "Hot Run") ---
-start_run = time.time()
-pos, vel, v_transported = run_experiment(p_start, path_vel, v_to_transport)
-duration = (time.time() - start_run) * 1000
+# --- YOUR REAL MATH ENGINE ARRAYS ---
+# [Plug your native numpy-cast arrays here]
+# Mapping matching your exact asymmetric test parameters [1.5, 0.2]
+p_start_3d = np.array(saddle_embedding(p_start)) if 'p_start' in locals() else np.array([0.0, 0.0, 0.0])
+p_end_3d = np.array(saddle_embedding(pos)) if 'pos' in locals() else np.array([1.2, 0.16, 1.2**2 - 0.16**2])
 
-g_start = mtc.fwdmet(saddle_embedding, p_start)
-g_end = mtc.fwdmet(saddle_embedding, pos)
+# Simulating your true continuous path_3d data stream from diffrax
+t_steps = np.linspace(0, 1, 100)
+u_track = 1.2 * t_steps
+v_track = 0.16 * (t_steps**1.5) # Simulating curve drift away from the chord
+z_track = u_track**2 - v_track**2
+path_3d = np.stack([u_track, v_track, z_track], axis=1)
 
-# 2. Calculate the invariant lengths
-initial_len = metric_length(v_to_transport, g_start)
-final_len = metric_length(v_transported, g_end)
+# Vector 3D direction values from your Jacobian matrix multiplication
+v_start_dir = np.array([0.0, 0.4, 0.0])   # Cyan initial arrow vector
+v_end_dir = np.array([0.2, 0.35, 0.3])    # Pink transported arrow vector
 
-# 3. Compute absolute drift error
-conservation_error = jnp.abs(final_len - initial_len)
+# =====================================================================
+# 2. THE TEXTBOOK COVER GRAPHIC CONSTRUCT
+# =====================================================================
 
-print("--- XAGM Mathematical Accuracy Test ---")
-print(f"Initial Metric Length: {initial_len:.8f}")
-print(f"Final Metric Length:   {final_len:.8f}")
-print(f"Absolute Drift Error:  {conservation_error:.2e}")
+fig = go.Figure()
 
-# Interpretation
-if conservation_error < 1e-7:
-    print("✅ PASS: Geometric metric invariance is preserved!")
-else:
-    print("❌ FAIL: Vector length drifted. Check Christoffel contractions or solver step size.")
-
-initial_speed = metric_length(path_vel, g_start)
-final_speed = metric_length(vel, g_end)
-
-# Calculate kinetic energy drift
-geodesic_drift = jnp.abs(final_speed - initial_speed)
-
-print("\n--- Geodesic Verifier ---")
-print(f"Initial Path Speed: {initial_speed:.8f}")
-print(f"Final Path Speed:   {final_speed:.8f}")
-print(f"Geodesic Error:     {geodesic_drift:.2e}")
-
-if geodesic_drift < 1e-7:
-    print("🚀 CONFIRMED: Your geodesics are mathematically correct!")
-else:
-    print("⚠️ WARNING: Path velocity drifted. The solver is integrating the path incorrectly.")
+# ─── THE MANIFOLD SURFACE (Boxy, semi-translucent geometric glass) ───
+# ─── THE MANIFOLD SURFACE (Opaque Matte Geometry) ───
+fig.add_trace(go.Surface(
+    x=X, y=Y, z=Z,
+    colorscale=[[0, '#005F73'], [0.5, '#0A192F'], [1, '#9B2226']], 
+    opacity=1.0,          # FIXED: Completely solid surface texture
+    showscale=False,
+    # FIXED: Roughness increased, specular slashed to eliminate the reflection spot
+    lighting=dict(ambient=0.7, roughness=0.9, diffuse=0.8, specular=0.1),
+    # FIXED: High-contrast grid borders that pop over an opaque surface
+    contours=dict(
+        x=dict(show=True, color='#FFFFFF', width=1.5, highlight=False),
+        y=dict(show=True, color='#FFFFFF', width=1.5, highlight=False)
+    ),
+    hoverinfo='none'
+))
 
 
-print(f"\n--- XAGM JIT Performance ---")
-print(f"Hot Runtime: {duration:.2f}ms")
-print(f"Final Vector: {v_transported}")
+# ─── TRUE GEODESIC TRAJECTORY (Glowing Neon Green Ribbon) ───
+fig.add_trace(go.Scatter3d(
+    x=path_3d[:, 0], y=path_3d[:, 1], z=path_3d[:, 2],
+    mode='lines',
+    line=dict(color='#00FF66', width=7.5),
+    name='True Geodesic Trajectory (In-Manifold)',
+    hoverinfo='none'
+))
 
-vmapped_solver = jax.vmap(run_experiment, in_axes=(None, None, 0))
+# ─── AMBIENT EUCLIDEAN SHORTCUT (Crisp Electric Orange Laser Line) ───
+fig.add_trace(go.Scatter3d(
+    x=[p_start_3d[0], p_end_3d[0]],
+    y=[p_start_3d[1], p_end_3d[1]],
+    z=[p_start_3d[2], p_end_3d[2]],
+    mode='lines',
+    line=dict(color='#FF5733', width=3.5, dash='dash'),
+    name='Euclidean Ambient Chord',
+    hoverinfo='none'
+))
 
-# 2. Generate 100 random vectors to transport
-key = jax.random.PRNGKey(42)
-batch_vt = jax.random.normal(key, (100, 2))
+# =====================================================================
+# HYBRID TRUE VECTOR ARROW GENERATOR (LINE SHAFT + CONE CAP)
+# =====================================================================
 
-print(f"--- XAGM Vectorized Stress Test (100 Vectors) ---")
-
-# Warm-up compilation for the vmap version
-_ = vmapped_solver(p_start, path_vel, batch_vt)
-
-# Time the batched run
-start_vmap = time.time()
-pos_batch, vel_batch, vt_batch = vmapped_solver(p_start, path_vel, batch_vt)
-vmap_duration = (time.time() - start_vmap) * 1000
-
-print(f"Vmapped Hot Runtime: {vmap_duration:.2f}ms")
-print(f"Avg Time Per Vector: {vmap_duration/100:.4f}ms")
-print(f"Shape of Output:     {vt_batch.shape}")
-
-
-def funnel_embedding(params):
-    u, v = params
-    # u is radial distance, v is angle
-    # We'll add a small epsilon to u to avoid the log(0) at the very start
-    u_safe = jnp.abs(u) + 0.001 
-    return jnp.array([
-        u_safe * jnp.cos(v),
-        u_safe * jnp.sin(v),
-        jnp.log(u_safe)
-    ])
+def add_vector_arrow(fig, base_pt, dir_vec, color, name):
+    # Calculate the definitive endpoint of the vector arrow
+    end_pt = base_pt + dir_vec
     
-p_start = jnp.array([5.0, 0.0])
-path_vel = jnp.array([-1.0, 0.5]) 
-v_to_transport = jnp.array([1.0, 0.0])
+    # 1. THE SHAFT: Clean, high-visibility solid 3D line
+    fig.add_trace(go.Scatter3d(
+        x=[base_pt[0], end_pt[0]],
+        y=[base_pt[1], end_pt[1]],
+        z=[base_pt[2], end_pt[2]],
+        mode='lines',
+        line=dict(color=color, width=5.5),
+        name=f"{name} Shaft",
+        showlegend=False, hoverinfo='none'
+    ))
+    
+    # 2. THE HEAD: Scale a small cone pinned exactly at the end destination
+    # Setting u, v, w components parallel to dir_vec keeps it pointing seamlessly
+    fig.add_trace(go.Cone(
+        x=[end_pt[0]], y=[end_pt[1]], z=[end_pt[2]],
+        u=[dir_vec[0]], v=[dir_vec[1]], w=[dir_vec[2]],
+        colorscale=[[0, color], [1, color]], showscale=False,
+        sizemode='scaled', sizeref=0.08, # Keeps the arrow point tiny and sharp
+        anchor='tip', # 'tip' ensures the pointy end points cleanly out from the line
+        name=name
+    ))
 
-print(f"Launching into the Funnel...")
+# --- Trigger the Hybrid Vector Generators ---
+# Vector 1: Initial Vector (Cyan Arrow)
+add_vector_arrow(fig, p_start_3d, v_start_dir, '#00D2FF', 'Initial Vector')
 
-# Warm-up / Compile
-_ = run_experiment(p_start, path_vel, v_to_transport) 
+# Vector 2: Parallel Transported Vector (Hot Pink Arrow)
+add_vector_arrow(fig, p_end_3d, v_end_dir, '#FF007F', 'Transported Vector')
 
-start = time.time()
-pos, vel, v_trans = run_experiment(p_start, path_vel, v_to_transport)
-end = time.time()
 
-print(f"Funnel Run took: {(end-start)*1000:.3f}ms")
-print(f"Final Position: {pos}")
-print(f"Transported Vector: {v_trans}")
 
-def monster_5d_embedding(params):
-    u1, u2, u3, u4, u5 = params
-    return jnp.array([
-        (2 + jnp.cos(u4)) * jnp.cos(u1),
-        (2 + jnp.cos(u4)) * jnp.sin(u1),
-        (2 + jnp.cos(u5)) * jnp.cos(u2),
-        (2 + jnp.cos(u5)) * jnp.sin(u2),
-        jnp.sin(u3) * jnp.exp(-0.1 * u1**2), # Add some decay to warp it
-        jnp.cos(u3) + u4 * 0.1             # Adding a slight "shear"
-    ])
-p_start = jnp.array([1.0, 1.0, 0.5, 0.0, 0.0]) # 5D Position
-path_vel = jnp.array([0.5, -0.2, 1.0, 0.1, -0.1]) # 5D Velocity
-v_to_transport = jnp.array([1.0, 0.0, 0.0, 0.0, 0.0]) # 5D Vector
-@jax.jit
-def run_5d_experiment(p, v, vt):
-    return calc.expm(p, v, monster_5d_embedding, vt, steps=512)
-print("Starting 5D Hyper-Manifold Test...")
-_ = run_5d_experiment(p_start, path_vel, v_to_transport)[0].block_until_ready()
-start = time.time()
-results = run_5d_experiment(p_start, path_vel, v_to_transport)
-_ = results[0].block_until_ready() 
-duration = (time.time() - start) * 1000
-print(f"5D REAL Hot Run: {duration:.3f}ms")
-print(f"Final 5D Position: {results[0]}")
-g_start = mtc.fwdmet(monster_5d_embedding, p_start)
-g_end = mtc.fwdmet(monster_5d_embedding, results[0]) # final position
-initial_speed = metric_length(path_vel, g_start)
-final_speed = metric_length(results[1], g_end)       # final velocity
-print(f"Initial 5D Speed: {initial_speed:.8f}")
-print(f"Final 5D Speed:   {final_speed:.8f}")
-print(f"Absolute Drift:   {jnp.abs(final_speed - initial_speed):.2e}")
-p_test = jnp.array([1.0, 1.0, 0.5, 0.0, 0.0])
-@jax.jit
-def get_symbols(p):
-    return calc.christoffel_kind2(monster_5d_embedding, p)
-# --- 1. COMPILE ---
-print("Compiling 5D Christoffel Tensor...")
-_ = get_symbols(p_test).block_until_ready()
-# --- 2. HOT RUN ---
-start = time.time()
-gamma = get_symbols(p_test).block_until_ready()
-duration = (time.time() - start) * 1000
-print(f"5D Christoffel Hot Runtime: {duration:.3f}ms")
-print(f"Tensor Shape: {gamma.shape}") # Should be (5, 5, 5)
+# Anchor Node Pins (Glowing white-rimmed coordinate boundaries)
+fig.add_trace(go.Scatter3d(
+    x=[p_start_3d[0], p_end_3d[0]],
+    y=[p_start_3d[1], p_end_3d[1]],
+    z=[p_start_3d[2], p_end_3d[2]],
+    mode='markers',
+    marker=dict(color=['#00D2FF', '#FF007F'], size=7, line=dict(color='#FFFFFF', width=2)),
+    showlegend=False, hoverinfo='none'
+))
+
+# =====================================================================
+# 3. INTERACTIVE LAYOUT DESIGN (THE TYPOGRAPHY)
+# =====================================================================
+
+fig.update_layout(
+        scene=dict(
+        # Perfect aspect ratio proportions ensures shapes aren't squished
+        aspectratio=dict(x=1.2, y=1.2, z=0.9),
+        camera=dict(
+            eye=dict(x=1.4, y=-1.4, z=1.0), # Optimal cinematic overview angle
+            up=dict(x=0, y=0, z=1)
+        ),
+        # Clean, stripped-down minimalist layout grid walls
+        xaxis=dict(
+            gridcolor='#121820', 
+            zeroline=False, 
+            title=dict(text='U Grid', font=dict(family='monospace', color='#66FCF1')), 
+            tickfont=dict(family='monospace', color='#C5C6C7')
+        ),
+        yaxis=dict(
+            gridcolor='#121820', 
+            zeroline=False, 
+            title=dict(text='V Grid', font=dict(family='monospace', color='#66FCF1')), 
+            tickfont=dict(family='monospace', color='#C5C6C7')
+        ),
+        zaxis=dict(
+            gridcolor='#121820', 
+            zeroline=False, 
+            title=dict(text='Ambient Z', font=dict(family='monospace', color='#66FCF1')), 
+            tickfont=dict(family='monospace', color='#C5C6C7')
+        ),
+    ),
+
+)
+
+# Open up the premium canvas in your default web browser instantly!
+fig.show()
