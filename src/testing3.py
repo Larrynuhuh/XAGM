@@ -9,74 +9,140 @@ from functools import partial
 import xagm
 from xagm.manifolds import calc
 from xagm.basis import metrics as mtc
+import jax
+import jax.numpy as jnp
+import time
+from functools import partial
 
-# Reuse your saddle surface embedding
-def saddle_embedding(params):
-    u, v = params
-    return jnp.array([u, v, u**2 - v**2])
+# Enforce double precision across the JAX runtime
+jax.config.update("jax_enable_x64", True)
 
-@partial(jax.jit, static_argnums=(2,))
-def run_experiment(p, v, embedding_fn, vt):
-    return calc.expm(p, v, embedding_fn, vt)
+# Placeholder referencing your framework configurations
+# import xagm
+# from xagm.manifolds import calc
 
-# =====================================================================
-# VECTORIZING THE TRANSPORT OPERATIONS
-# =====================================================================
-# in_axes=(None, None, None, 0) means: keep position, velocity, and surface static,
-# but slice down the 0th axis of our batch of tangent vectors to process them in parallel!
-vectorized_transport_solver = jax.vmap(run_experiment, in_axes=(None, None, None, 0))
+# --- 1. THE 3D SPHERICAL METRIC MANUFACTURED SOLUTION ---
+def spherical_3d_metric(pos):
+    """
+    Manufactured solution using 3D Flat Spherical Space.
+    Coordinates: pos[0]=r, pos[1]=theta, pos[2]=phi
+    Metric: g = diag(1, r^2, r^2 * sin^2(theta))
+    """
+    r = pos[0]
+    theta = pos[1]
+    phi = pos[2]
+    
+    g00 = 1.0
+    g11 = r**2
+    g22 = (r**2) * (jnp.sin(theta)**2)
+    
+    # Dynamically build the structural 3x3 matrix
+    return jnp.diag(jnp.array([g00, g11, g22]))
 
-def execute_parallel_transport_batch():
-    p_start = jnp.array([0.0, 0.0])
-    path_vel = jnp.array([1.0, 1.0]) # Direction we are pushing along the geodesic
+
+# --- 2. THE RIGOROUS UNIT TESTING ENGINE ---
+def run_3d_spherical_unit_test(riemtens_func):
+    print("==================================================")
+    print("RUNNING 3D SPHERICAL MANUFACTURED SOLUTIONS TEST")
+    print("==================================================")
     
-    # Generate a random batch of 100 unique tangent vectors at the starting point
-    key = jax.random.PRNGKey(1234)
-    batch_vectors = jax.random.normal(key, (100, 2))
+    # Test point: r=1.5, theta=pi/4, phi=pi/3
+    x_test = jnp.array([1.5, jnp.pi / 4.0, jnp.pi / 3.0], dtype=jnp.float64)
     
-    print("=" * 70)
-    print("🚀 EXECUTING FULLY VECTORIZED PARALLEL TRANSPORT TRACE")
-    print("=" * 70)
+    # Evaluate native and metric components
+    R = riemtens_func(spherical_3d_metric, x_test)
+    g = spherical_3d_metric(x_test)
     
-    print("Compiling XLA Vectorized Transport Graph...")
-    start_comp = time.time()
-    # Trigger initial compile tracing
-    _ = vectorized_transport_solver(p_start, path_vel, saddle_embedding, batch_vectors)
-    jax.tree_util.tree_map(lambda x: x.block_until_ready(), _)
-    print(f"-> Compilation took: {time.time() - start_comp:.2f} seconds\n")
+    # Lower upstairs index (Axis 0): R_{mouv} = g_{mp} R^p_{ouv}
+    R_low = jnp.einsum('mp, pouv -> mouv', g, R)
     
-    print("Launching 100 Vectors Simultaneously Across the Saddle Geometry...")
-    start_run = time.time()
-    positions, velocities, transported_batch = vectorized_transport_solver(
-        p_start, path_vel, saddle_embedding, batch_vectors
-    )
-    jax.tree_util.tree_map(lambda x: x.block_until_ready(), (positions, velocities, transported_batch))
-    duration = (time.time() - start_run) * 1000
+    # Identity Symmetries Check
+    asym_m_o = jnp.abs(R_low + jnp.transpose(R_low, (1, 0, 2, 3))).max()
+    asym_u_v = jnp.abs(R_low + jnp.transpose(R_low, (0, 1, 3, 2))).max()
+    bianchi_1 = jnp.abs(R_low + 
+                        jnp.transpose(R_low, (0, 3, 1, 2)) + 
+                        jnp.transpose(R_low, (0, 2, 3, 1))).max()
     
-    print(f"-> Hot Batch Execution took: {duration:.3f} ms")
-    print(f"-> Average execution time per transported vector: {duration/100:.5f} ms")
-    print(f"-> Output Shape of Transported Field: {transported_batch.shape}\n")
+    print(f"Structural Antisymmetry (m <-> o) Max Error: {asym_m_o:.2e}")
+    print(f"Differential Antisymmetry (u <-> v) Max Error: {asym_u_v:.2e}")
+    print(f"First Algebraic Bianchi Identity Error:    {bianchi_1:.2e}")
     
-    # Verify that the metric length invariant was preserved for EVERY vector in the batch
-    g_start = mtc.fwdmet(saddle_embedding, p_start)
-    g_end = mtc.fwdmet(saddle_embedding, positions[0]) # Every vector lands at the same endpoint
+    tol = 1e-12
+    assert asym_m_o < tol, "Unit test failed on Structural Symmetries!"
+    assert asym_u_v < tol, "Unit test failed on Differential Symmetries!"
+    assert bianchi_1 < tol, "Unit test failed on First Bianchi Symmetries!"
+    print("\n[PASSED]: 3D Riemann tensor output layout aligns perfectly.")
+
+
+# --- 3. HARDWARE RUNTIME EXECUTION BENCHMARK ---
+def benchmark_execution_speed(riemtens_func):
+    print("\n==================================================")
+    print("LAUNCHING RUNTIME SPEED PROFILER")
+    print("==================================================")
+    x_test = jnp.array([1.5, jnp.pi / 4.0, jnp.pi / 3.0], dtype=jnp.float64)
     
-    # Check length conservation on a sample vector from the batch (e.g., vector #42)
-    idx = 42
-    v_init_len = jnp.sqrt(jnp.dot(batch_vectors[idx], jnp.dot(g_start, batch_vectors[idx])))
-    v_final_len = jnp.sqrt(jnp.dot(transported_batch[idx], jnp.dot(g_end, transported_batch[idx])))
-    drift = jnp.abs(v_final_len - v_init_len)
+    # Compile the target tensor pipeline using XLA JIT
+    jit_riemtens = jax.jit(partial(riemtens_func, spherical_3d_metric))
     
-    print(f"--- BATCH INTEGRITY AUDIT (Vector #{idx}) ---")
-    print(f"Initial Length: {v_init_len:.12f}")
-    print(f"Final Length:   {v_final_len:.12f}")
-    print(f"Absolute Drift:  {drift:.2e}")
+    # Warm-up run to eliminate XLA compilation overhead latency
+    warmup_res = jit_riemtens(x_test)
+    warmup_res.block_until_ready()
     
-    if drift < 1e-7:
-        print("\n✅ PASSED: Full vectorized parallel transport is working smoothly right now!")
+    # Benchmark execution loop
+    loops = 1000
+    start_time = time.perf_counter()
+    for _ in range(loops):
+        res = jit_riemtens(x_test)
+    res.block_until_ready() # Force JAX asynchronous execution dispatch to finish
+    end_time = time.perf_counter()
+    
+    avg_latency = (end_time - start_time) / loops
+    print(f"Total time for {loops} iterations: {end_time - start_time:.4f} sec")
+    print(f"Average point evaluation speed:      {avg_latency * 1e6:.2f} microseconds (µs)")
+
+
+# --- 4. HLO EXPERT PERFORMANCE INSPECTION (FLOPS & BYTES) ---
+def inspect_hlo_ir_structures(riemtens_func):
+    print("\n==================================================")
+    print("EXTRACTING XLA HLO PERFORMANCE DATA")
+    print("==================================================")
+    x_test = jnp.array([1.5, jnp.pi / 4.0, jnp.pi / 3.0], dtype=jnp.float64)
+    
+    # 1. Lower the function ahead of time
+    compiled_stages = jax.jit(partial(riemtens_func, spherical_3d_metric)).lower(x_test)
+    
+    # 2. Extract hardware cost profiling data
+    cost_analysis = compiled_stages.cost_analysis()
+    
+    print("--- COMPUTATIONAL COST CHARACTERISTICS ---")
+    if cost_analysis:
+        flops = cost_analysis.get('flops', 0)
+        bytes_moved = cost_analysis.get('bytes accessed', 0)
+        print(f"Total FLOPS (Floating-Point Operations): {int(flops):,}")
+        print(f"Total Bytes Accessed (Memory Bandwidth): {int(bytes_moved):,} bytes")
+        if bytes_moved > 0:
+            print(f"Operational Intensity (FLOPS/Byte):     {flops/bytes_moved:.3f}")
     else:
-        print("\n❌ FAILED: Invariance dropped during vector optimization loop.")
-    print("=" * 70)
+        print("Note: Cost analysis details omitted or unsupported on this backend profile context.")
+
+    # 3. FIXED: Extract raw HLO text using JAX's universal AOT text extractor
+    hlo_text = compiled_stages.as_text("hlo") # This returns a native Python string!
+    
+    print("\n--- STACK STORAGE REPLICAS (HLO CLUSTERS SNAPSHOT) ---")
+    # FIXED: hlo_text is a string object; splitlines() works perfectly here
+    lines = hlo_text.splitlines() 
+    printed_lines = 0
+    for line in lines:
+        if "ENTRY" in line or "f64[" in line or "parameter" in line:
+            print(line)
+            printed_lines += 1
+            if printed_lines >= 12:  # Keep display tight and scannable
+                break
+
 
 if __name__ == "__main__":
-    execute_parallel_transport_batch()
+    # To execute this natively inside your workflow pipeline:
+    run_3d_spherical_unit_test(calc.riemtens)
+    benchmark_execution_speed(calc.riemtens)
+    inspect_hlo_ir_structures(calc.riemtens)
+    pass
