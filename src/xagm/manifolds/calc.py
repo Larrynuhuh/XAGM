@@ -86,5 +86,19 @@ def expm(p: Vector, v: Vector, mapped_func, vt: Vector, steps: int = 4096) -> Ve
     return final_pos, final_vel, transported_v
 
 
+def riemtens(func, x: Vector) -> Tensor:
+    
+    _, dg_raw = jax.vmap(lambda v: jax.jvp(lambda v: christoffel_kind2(func, v), (x,), (v,)))(jnp.eye(x.shape[0]))
+    dg = jnp.moveaxis(dg_raw, 0, -1)
 
+    ch = christoffel_kind2(func, x)
+
+    term1 = jnp.transpose(dg, axes=[0, 1, 3, 2])
+    term2 = dg
+    term3 = jnp.einsum('pua, avo -> pouv', ch, ch)
+    term4 = jnp.einsum('pva, auo -> pouv', ch, ch)
+
+    tensor = term1 - term2 + term3 - term4
+
+    return tensor
 
