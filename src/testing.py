@@ -44,7 +44,7 @@ def saddle_embedding(params):
 
 def funnel_embedding(params):
     u, v = params
-    u_safe = jnp.abs(u) + 0.001 
+    u_safe = jnp.sqrt(u**2 + 1e-6) 
     return jnp.array([
         u_safe * jnp.cos(v),
         u_safe * jnp.sin(v),
@@ -158,7 +158,7 @@ def run_all_tests():
     print(f"Geodesic Error:     {geodesic_drift:.2e}")
 
     if geodesic_drift < 1e-7:
-        print("🚀 CONFIRMED: Your geodesics are mathematically correct!")
+        print("🚀 CONFIRMED: Geodesics are mathematically correct!")
     else:
         print("⚠️ WARNING: Path velocity drifted. The solver is integrating the path incorrectly.")
 
@@ -320,15 +320,10 @@ if cost_analysis is not None:
     # Pull memory read/written bytes from the compilation block
     memory_bytes = cost_analysis.get('bytes accessed', 0)
     memory_mb = memory_bytes / (1024 * 1024)
-    
-    print("-" * 50)
     print(f"🚀 TOTAL FLOPS EXECUTED       : {int(flops):,} FLOPs")
     print(f"💾 COMPILER MEMORY ALLOCATED  : {memory_mb:.4f} MB ({int(memory_bytes):,} Bytes)")
-    print("-" * 50)
     print("Interpretation:")
     print(f"Every single hot run executes over {int(flops):,} mathematical ops.")
-    print("Because memory allocation is so small, it completely sits within")
-    print("your hardware's hyper-fast L1/L2 cache, explaining your sub-ms speeds!")
 else:
     print("⚠️ Hardware cost analysis not supported on this specific backend device.")
 print("=" * 70)
