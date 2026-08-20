@@ -102,3 +102,8 @@ def riemtens(func, x: Vector) -> Tensor:
 
     return tensor
 
+
+def rictens(func, x: Vector) -> Tensor:
+
+    return jnp.einsum('popv -> ov', riemtens(func, x))
+
