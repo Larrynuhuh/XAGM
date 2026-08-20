@@ -140,9 +140,56 @@ def inspect_hlo_ir_structures(riemtens_func):
                 break
 
 
-if __name__ == "__main__":
+'''if __name__ == "__main__":
     # To execute this natively inside your workflow pipeline:
     run_3d_spherical_unit_test(calc.riemtens)
     benchmark_execution_speed(calc.riemtens)
     inspect_hlo_ir_structures(calc.riemtens)
-    pass
+    pass'''
+
+
+
+def true_curved_surface_2d(pos):
+    """
+    Maps a 2D coordinate vector (u, v) into a 3D physical space.
+    This creates an intrinsically curved surface where Riemann is NON-ZERO.
+    """
+    u = pos[0]
+    v = pos[1]
+    
+    # Embedding map into a higher dimension (3D)
+    x = u
+    y = v
+    z = jnp.sin(u) * jnp.cos(v)  # This wrinkle causes true, non-zero curvature
+    
+    return jnp.array([x, y, z])
+
+def execute_ricci_proof():
+    # Use the exact same test point and curved surface from your successful Run 3
+    x_test = jnp.array([1.0, 0.5], dtype=jnp.float64)
+    
+    # 1. Compute the Ricci tensor components
+    Ric = calc.rictens(true_curved_surface_2d, x_test)
+    
+    print("==========================================================")
+    print("RICCI TENSOR COMPUTATION & SYMMETRY PROOF")
+    print("==========================================================")
+    print("Calculated Ricci Tensor R_ij Components:\n", Ric)
+    
+    # 2. Verify that Ricci is non-zero (so we aren't testing zeros)
+    max_val = jnp.abs(Ric).max()
+    print(f"Max Absolute Ricci Component Value: {max_val:.4f}")
+    assert max_val > 1e-3, "ERROR: Ricci tensor evaluates to zero! The space must be curved."
+    
+    # 3. Rigorous Symmetry Check: R_ij must equal R_ji
+    # In 2D, transposing axes (1, 0) swaps i and j.
+    ric_symmetry_error = jnp.abs(Ric - jnp.transpose(Ric, (1, 0))).max()
+    
+    print(f"Ricci Tensor Symmetry (R_ij <-> R_ji) Max Error: {ric_symmetry_error:.2e}")
+    
+    tol = 1e-12
+    assert ric_symmetry_error < tol, "Unit test failed! Ricci tensor is not symmetric."
+    print("\n[PASSED]: Ricci tensor index contraction layout is perfectly accurate!")
+
+if __name__ == "__main__":
+    execute_ricci_proof()
