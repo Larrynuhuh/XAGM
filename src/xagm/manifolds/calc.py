@@ -21,7 +21,7 @@ def christoffel_kind1(func, x: Vector) -> Matrix:
 def christoffel_kind2(func, x: Vector) -> Matrix:
     
     g = mtc.fwdmet(func, x)
-    ginv = mtc.metinv(g)
+    ginv = jnp.linalg.inv(g)
     mtc_func = lambda v: mtc.fwdmet(func, v)
 
     __,dg_raw = jax.vmap(lambda v: jax.jvp(mtc_func, (x,), (v,)))(jnp.eye(x.shape[0]))
