@@ -90,7 +90,7 @@ def run_experiment(p, v, embedding_fn, vt):
 
 @partial(jax.jit, static_argnums=(2,))
 def run_5d_experiment(p, v, embedding_fn, vt):
-    return calc.expm(p, v, embedding_fn, vt, steps=512)
+    return calc.expm(p, v, embedding_fn, vt, steps=32)
 
 
 @partial(jax.jit, static_argnums=(0,))
