@@ -127,7 +127,7 @@ def run_all_tests():
 
     print("Executing Hot Run...")
     start_run = time.time()
-    pos, vel, v_transported = run_experiment(p_start, path_vel, saddle_embedding, v_to_transport)
+    pos, vel, v_transported, _, _ = run_experiment(p_start, path_vel, saddle_embedding, v_to_transport)
     block_structure((pos, vel, v_transported))
     duration = (time.time() - start_run) * 1000
 
@@ -187,7 +187,7 @@ def run_all_tests():
 
     print(f"Executing Batch Run (100 Vectors)...")
     start_vmap = time.time()
-    pos_batch, vel_batch, vt_batch = vmapped_solver(p_start, path_vel, saddle_embedding, batch_vt)
+    pos_batch, vel_batch, vt_batch, _, _ = vmapped_solver(p_start, path_vel, saddle_embedding, batch_vt)
     block_structure((pos_batch, vel_batch, vt_batch))
     vmap_duration = (time.time() - start_vmap) * 1000
 
@@ -215,7 +215,7 @@ def run_all_tests():
 
     print(f"Launching into the Funnel...")
     start_funnel_run = time.time()
-    pos_f, vel_f, v_trans_f = run_experiment(p_start_funnel, path_vel_funnel, funnel_embedding, v_to_transport_funnel)
+    pos_f, vel_f, v_trans_f, _, _ = run_experiment(p_start_funnel, path_vel_funnel, funnel_embedding, v_to_transport_funnel)
     block_structure((pos_f, vel_f, v_trans_f))
     end_funnel_run = time.time()
 
