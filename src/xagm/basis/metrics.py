@@ -36,11 +36,11 @@ def metinterp(g0: Matrix, v0: Vector,
  target: Vector) -> Matrix:
     
     vals0, vecs0 = jnp.linalg.eigh(g0)
-    logvals0 = jnp.log(jnp.maximum(vals0, 1e-7))
+    logvals0 = jnp.log(jnp.maximum(vals0, 1e-13))
     lg0 = jnp.einsum('ik, k, jk -> ij', vecs0, logvals0, vecs0)
 
     vals1, vecs1 = jnp.linalg.eigh(g1)
-    logvals1 = jnp.log(jnp.maximum(vals1, 1e-7))
+    logvals1 = jnp.log(jnp.maximum(vals1, 1e-13))
     lg1 = jnp.einsum('ik, k, jk -> ij', vecs1, logvals1, vecs1)
 
     d = v1 - v0

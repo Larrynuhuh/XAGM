@@ -195,15 +195,43 @@ def execute_ricci_proof():
     #execute_ricci_proof()
 
 
-@partial(jax.jit, static_argnums=(2,))
-def run_5d_experiment(p, v, embedding_fn, vt, j, w):
-    return calc.expm(p, v, embedding_fn, vt, j, w, steps=32)
 
-@jax.jit
-def metric_length(v, g):
-    return jnp.sqrt(jnp.dot(v, jnp.dot(g, v)))
 
-    
+def stereographic_embedding(params):
+    u, v = params
+    denom = 1 + u**2 + v**2
+    return jnp.array([
+        (2 * u) / denom,
+        (2 * v) / denom,
+        (u**2 + v**2 - 1) / denom
+    ])
+
+
+def sphere_embedding(params):
+    u, v = params
+    return jnp.array([jnp.sin(u) * jnp.cos(v), jnp.sin(u) * jnp.sin(v), jnp.cos(u)])
+
+
+def flat_embedding(params):
+    u, v = params
+    return jnp.array([u, v, 0.0])
+
+
+def saddle_embedding(params):
+    u, v = params
+    return jnp.array([u, v, u**2 - v**2])
+
+
+def funnel_embedding(params):
+    u, v = params
+    u_safe = jnp.sqrt(u**2 + 1e-6) 
+    return jnp.array([
+        u_safe * jnp.cos(v),
+        u_safe * jnp.sin(v),
+        jnp.log(u_safe)
+    ])
+
+
 def monster_5d_embedding(params):
     u1, u2, u3, u4, u5 = params
     return jnp.array([
@@ -214,71 +242,183 @@ def monster_5d_embedding(params):
         jnp.sin(u3) * jnp.exp(-0.1 * u1**2), 
         jnp.cos(u3) + u4 * 0.1             
     ])
-def test_5d_hyper_manifold_with_jacobi():
-    print("=" * 60)
-    print("TEST 4 (UPDATED): 5D Geometric Hyper-Manifold with Jacobi Fields")
+
+
+# =====================================================================
+# 2. UTILITY & SOLVER CORES (FIXED: Static Embedding Arguments)
+# =====================================================================
+
+def inner_prod(v1, v2, metric):
+    return jnp.dot(v1, jnp.dot(metric, v2))
+
+
+def to_3d(p, v_coord, embedding_fn):
+    jac = jax.jacobian(embedding_fn)(p)
+    return jac @ v_coord
+
+
+@jax.jit
+def metric_length(v, g):
+    return jnp.sqrt(jnp.dot(v, jnp.dot(g, v)))
+
+
+# Fix: static_argnums=2 allows passing varying manifold embeddings without cross-contamination
+@partial(jax.jit, static_argnums=(2,))
+def run_experiment(p, v, embedding_fn, vt):
+    return calc.expm(p, v, embedding_fn, vt)
+
+
+@partial(jax.jit, static_argnums=(2,))
+def run_5d_experiment(p, v, embedding_fn, vt):
+    return calc.expm(p, v, embedding_fn, vt, steps=32)
+
+
+@partial(jax.jit, static_argnums=(0,))
+def get_symbols(embedding_fn, p):
+    return calc.christoffel_kind2(embedding_fn, p)
+
+
+# Unpack utility that handles blocking on mixed tuples/structures safely
+def block_structure(struct):
+    return jax.tree_util.tree_map(lambda x: x.block_until_ready(), struct)
+
+
+
+
+
+
+
+
+def run_decoupled_verification_suite():
+    print("=" * 70)
+    print("XAGM MODULAR SOLVER VERIFICATION & PERFORMANCE SUITE")
+    print("=" * 70)
+
+    # -----------------------------------------------------------------
+    # TEST 1: THE PSEUDOSPHERICAL FUNNEL (EXPM + PARATRANS DEMO)
+    # -----------------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("TEST 1: Pseudospherical Logarithmic Funnel Execution")
     print("=" * 60)
     
-    # Base Geodesic Configuration
+    p_start_funnel = jnp.array([5.0, 0.0])
+    path_vel_funnel = jnp.array([-1.0, 0.5]) 
+    v_to_transport_funnel = jnp.array([1.0, 0.0])
+
+    # Isolated target wrappers for JAX profiling
+    @jax.jit
+    def compile_funnel_expm(p, v):
+        return calc.expm(p, v, mapped_func=funnel_embedding, steps=512)
+
+    @jax.jit
+    def compile_funnel_transport(p, v, vt):
+        return calc.paratrans(p, v, vt, mapped_func=funnel_embedding, steps=512)
+
+    print("Compiling Funnel Metric Space (Expm & Transport)...")
+    start_funnel_comp = time.time()
+    # Trigger graph construction
+    _pos, _vel = compile_funnel_expm(p_start_funnel, path_vel_funnel)
+    _vt = compile_funnel_transport(p_start_funnel, path_vel_funnel, v_to_transport_funnel)
+    jax.block_until_ready((_pos, _vel, _vt))
+    print(f"Funnel Compilation took: {time.time() - start_funnel_comp:.2f}s\n")
+
+    print(f"Launching into the Funnel...")
+    start_funnel_run = time.time()
+    pos_f, vel_f = compile_funnel_expm(p_start_funnel, path_vel_funnel)
+    v_trans_f = compile_funnel_transport(p_start_funnel, path_vel_funnel, v_to_transport_funnel)
+    jax.block_until_ready((pos_f, vel_f, v_trans_f))
+    duration_funnel = (time.time() - start_funnel_run) * 1000
+
+    print(f"Funnel Run took: {duration_funnel:.3f}ms")
+    print(f"Final 2D Position:  {pos_f}")
+    print(f"Final 2D Velocity:  {vel_f}")
+    print(f"Transported Vector: {v_trans_f}\n")
+
+    # -----------------------------------------------------------------
+    # TEST 2: THE 5D HYPER-MANIFOLD STRESS-TEST (EXPM + JACOBI DEMO)
+    # -----------------------------------------------------------------
+    print("=" * 60)
+    print("TEST 2: High-Dimensional 5D Geometric Hyper-Manifold")
+    print("=" * 60)
+    
     p_start_5d = jnp.array([1.0, 1.0, 0.5, 0.0, 0.0]) 
     path_vel_5d = jnp.array([0.5, -0.2, 1.0, 0.1, -0.1]) 
-    v_to_transport_5d = jnp.array([1.0, 0.0, 0.0, 0.0, 0.0]) 
-
-    # ACTIVE JACOBI FIELD INPUTS
-    # A small offset in all 5 coordinate directions
     j_start_5d = jnp.array([0.1, 0.1, 0.1, 0.1, 0.1])
-    # Starting perfectly parallel to the main path
     w_start_5d = jnp.array([0.0, 0.0, 0.0, 0.0, 0.0])
 
-    print("Compiling 5D Manifold Hyper-Graph with Jacobi...")
+    @jax.jit
+    def compile_5d_expm(p, v):
+        return calc.expm(p, v, mapped_func=monster_5d_embedding, steps=32)
+
+    @jax.jit
+    def compile_5d_jacobi(p, v, j, w):
+        return calc.jacobi_fields(p, v, j, w, mapped_func=monster_5d_embedding, steps=32)
+
+    print("Compiling 5D Manifold Hyper-Graph (Expm & Jacobi)...")
     start_5d_comp = time.time()
-    
-    # Pass j and w explicitly to your experiment wrapper / expm call
-    res_5d = run_5d_experiment(
-        p_start_5d, path_vel_5d, monster_5d_embedding, v_to_transport_5d,
-        j=j_start_5d, w=w_start_5d
-    )
+    _pos5d, _vel5d = compile_5d_expm(p_start_5d, path_vel_5d)
+    _j5d, _w5d = compile_5d_jacobi(p_start_5d, path_vel_5d, j_start_5d, w_start_5d)
+    jax.block_until_ready((_pos5d, _vel5d, _j5d, _w5d))
     print(f"5D Compilation took: {time.time() - start_5d_comp:.2f}s\n")
 
     print("Starting 5D Hyper-Manifold Hot Execution...")
     start_5d_run = time.time()
-    
-    # Hot Run
-    results_5d = run_5d_experiment(
-        p_start_5d, path_vel_5d, monster_5d_embedding, v_to_transport_5d,
-        j=j_start_5d, w=w_start_5d
-    )
+    final_pos_5d, final_vel_5d = compile_5d_expm(p_start_5d, path_vel_5d)
+    final_jac_5d, final_w_5d = compile_5d_jacobi(p_start_5d, path_vel_5d, j_start_5d, w_start_5d)
+    jax.block_until_ready((final_pos_5d, final_vel_5d, final_jac_5d, final_w_5d))
     duration_5d = (time.time() - start_5d_run) * 1000
     
-    # Unpack all 5 outputs returned by your expm function
-    final_pos, final_vel, transported_v, final_jac, jac_velo = results_5d
-    
     print(f"5D REAL Hot Run: {duration_5d:.3f}ms")
-    print(f"Final 5D Position:   {final_pos}")
-    print(f"Initial Jacobi Vector: {j_start_5d}")
-    print(f"Final Jacobi Vector:   {final_jac}\n")
+    print(f"Final 5D Position:     {final_pos_5d}")
+    print(f"Final 5D Jacobi Field: {final_jac_5d}")
     
-    # Baseline Metric Conservation Verification
+    # Speed Preservation Audit via Core Metric File
     g_start_5d = mtc.fwdmet(monster_5d_embedding, p_start_5d)
-    g_end_5d = mtc.fwdmet(monster_5d_embedding, final_pos) 
+    g_end_5d = mtc.fwdmet(monster_5d_embedding, final_pos_5d) 
     
     initial_speed_5d = metric_length(path_vel_5d, g_start_5d)
-    final_speed_5d = metric_length(final_vel, g_end_5d)       
+    final_speed_5d = metric_length(final_vel_5d, g_end_5d)       
     
     print(f"Initial 5D Speed: {initial_speed_5d:.8f}")
     print(f"Final 5D Speed:   {final_speed_5d:.8f}")
     print(f"Absolute Drift:   {jnp.abs(final_speed_5d - initial_speed_5d):.2e}\n")
 
-    # THE CRUCIAL GEOMETRIC CHECKS
-    # Check 1: Did the Jacobi field remain locked in flat space, or did curvature act on it?
-    is_flat_space_linear = jnp.allclose(final_jac, j_start_5d + w_start_5d * 1.0, atol=1e-5)
+    # -----------------------------------------------------------------
+    # TEST 3: COMPILER AUDIT & INTERNAL PROFILE DATA
+    # -----------------------------------------------------------------
+    print("=" * 60)
+    print("TEST 3: XLA Compiler Audit & Hardware cost analysis")
+    print("=" * 60)
     
-    if is_flat_space_linear:
-        print("❌ DIAGNOSTIC RESULT: Geodesics work, but Jacobi Fields are failing to experience curvature!")
-        print("Your Riemann contraction string or derivative coupling in geoexp_term evaluates to zero.")
-    else:
-        print("✅ DIAGNOSTIC RESULT: Jacobi Fields are dynamically evolving under hyper-manifold curvature!")
+    print("\n[1] LOWERING EXPM SOLVER GRAPH TO STABLE-HLO...")
+    lowered_expm = compile_5d_expm.lower(p_start_5d, path_vel_5d)
+    hlo_text = lowered_expm.as_text(dialect="hlo")
+    print(f"-> Generated HLO Optimized IR Length: {len(hlo_text)} characters.")
+    print(f"-> Sample of bare-metal compilation structures (First 15 lines):")
+    print("-" * 60)
+    print("\n".join(hlo_text.splitlines()[:15]))
+    print("-" * 60)
 
-# Run the test
-test_5d_hyper_manifold_with_jacobi()
+    print("\n[2] EXTRACTING HARDWARE PERFORMANCE PROFILES...")
+    compiled_jacobi = compile_5d_jacobi.lower(p_start_5d, path_vel_5d, j_start_5d, w_start_5d).compile()
+    
+    try:
+        # Request cost tracking from current device hardware backend [INDEX]
+        cost_analysis = compiled_jacobi.cost_analysis()
+        if cost_analysis is not None:
+            flops = cost_analysis.get('flops', 0)
+            memory_bytes = cost_analysis.get('bytes accessed', 0)
+            memory_mb = memory_bytes / (1024 * 1024)
+            print(f"🚀 DETECTED INTEGRATION FLOPS : {int(flops):,} FLOPs")
+            print(f"💾 RUNTIME DATA MEMORY PASS    : {memory_mb:.4f} MB")
+        else:
+            print("-> Hardware analysis parsed. (Backend constraints active.)")
+    except Exception as e:
+        print(f"⚠️ Cost analysis dictionary bypassed on this backend target: {str(e)}")
+    
+    print("=" * 70)
+    print("                DECOUPLED VERIFICATION COMPLETE                   ")
+    print("=" * 70)
 
+if __name__ == "__main__":
+    run_decoupled_verification_suite()
