@@ -40,13 +40,16 @@ def christoffel_kind2(func, x: Vector) -> Matrix:
 
 
 def geoexp_term(t, state, args) -> Vector:
-    dim = state.shape[0] // 3
+    dim = state.shape[0] // 5
 
-    x = state[:dim] 
+    x = state[0:dim] 
     v = state[dim:2*dim]
-    y = state[2*dim:]
+    y = state[2*dim:3*dim]
+    j = state[3*dim:4*dim]
+    w = state[4*dim:5*dim]
 
     func = args['func']
+    R = riemtens(func, x)
 
     gamma = christoffel_kind2(func, x)
 
@@ -54,12 +57,30 @@ def geoexp_term(t, state, args) -> Vector:
 
     dvecdt = -jnp.einsum('kij, i, j -> k', gamma, v, y) 
 
-    return jnp.concatenate([v, v_dot, dvecdt])
+    curvature = jnp.einsum('ljki, j, k, i -> l', R, v, v, j)
+
+    dJdt = w - jnp.einsum('kij, i, j -> k', gamma, v, j)
+
+    dWdt = -curvature - jnp.einsum('kij, i, j -> k', gamma, v, w)
+
+    return jnp.concatenate([v, v_dot, dvecdt, dJdt, dWdt])
 
 
-def expm(p: Vector, v: Vector, mapped_func, vt: Vector, steps: int = 4096) -> Vector:
+def expm(p: Vector,
+ v: Vector, 
+ mapped_func,
+ vt=jnp.array([0.0]),
+ j=jnp.array([0.0]),
+ w=jnp.array([0.0]),
+ steps: int = 512) -> (
+Vector, Vector, Vector, Vector, Vector
+):
 
-    state = jnp.concatenate([p, v, vt])
+    use_vt = jnp.where(vt.shape[0] == 1, jnp.zeros_like(p), jnp.broadcast_to(vt, p.shape))
+    use_j = jnp.where(j.shape[0] == 1, jnp.zeros_like(p), jnp.broadcast_to(j, p.shape))
+    use_w = jnp.where(w.shape[0] == 1, jnp.zeros_like(p), jnp.broadcast_to(w, p.shape))
+
+    state = jnp.concatenate([p, v, use_vt, use_j, use_w])
 
     solution = diffrax.diffeqsolve(
         terms = diffrax.ODETerm(geoexp_term),
@@ -81,9 +102,11 @@ def expm(p: Vector, v: Vector, mapped_func, vt: Vector, steps: int = 4096) -> Ve
     dim = p.shape[0]
     final_pos = result[:dim]
     final_vel = result[dim:2*dim]
-    transported_v = result[2*dim:]
+    transported_v = result[2*dim:3*dim]
+    final_jac = result[3*dim:4*dim]
+    jac_velo = result[4*dim:5*dim]
 
-    return final_pos, final_vel, transported_v
+    return final_pos, final_vel, transported_v, final_jac, jac_velo
 
 
 def riemtens(func, x: Vector) -> Tensor:

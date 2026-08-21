@@ -191,5 +191,94 @@ def execute_ricci_proof():
     assert ric_symmetry_error < tol, "Unit test failed! Ricci tensor is not symmetric."
     print("\n[PASSED]: Ricci tensor index contraction layout is perfectly accurate!")
 
-if __name__ == "__main__":
-    execute_ricci_proof()
+#if __name__ == "__main__":
+    #execute_ricci_proof()
+
+
+@partial(jax.jit, static_argnums=(2,))
+def run_5d_experiment(p, v, embedding_fn, vt, j, w):
+    return calc.expm(p, v, embedding_fn, vt, j, w, steps=32)
+
+@jax.jit
+def metric_length(v, g):
+    return jnp.sqrt(jnp.dot(v, jnp.dot(g, v)))
+
+    
+def monster_5d_embedding(params):
+    u1, u2, u3, u4, u5 = params
+    return jnp.array([
+        (2 + jnp.cos(u4)) * jnp.cos(u1),
+        (2 + jnp.cos(u4)) * jnp.sin(u1),
+        (2 + jnp.cos(u5)) * jnp.cos(u2),
+        (2 + jnp.cos(u5)) * jnp.sin(u2),
+        jnp.sin(u3) * jnp.exp(-0.1 * u1**2), 
+        jnp.cos(u3) + u4 * 0.1             
+    ])
+def test_5d_hyper_manifold_with_jacobi():
+    print("=" * 60)
+    print("TEST 4 (UPDATED): 5D Geometric Hyper-Manifold with Jacobi Fields")
+    print("=" * 60)
+    
+    # Base Geodesic Configuration
+    p_start_5d = jnp.array([1.0, 1.0, 0.5, 0.0, 0.0]) 
+    path_vel_5d = jnp.array([0.5, -0.2, 1.0, 0.1, -0.1]) 
+    v_to_transport_5d = jnp.array([1.0, 0.0, 0.0, 0.0, 0.0]) 
+
+    # ACTIVE JACOBI FIELD INPUTS
+    # A small offset in all 5 coordinate directions
+    j_start_5d = jnp.array([0.1, 0.1, 0.1, 0.1, 0.1])
+    # Starting perfectly parallel to the main path
+    w_start_5d = jnp.array([0.0, 0.0, 0.0, 0.0, 0.0])
+
+    print("Compiling 5D Manifold Hyper-Graph with Jacobi...")
+    start_5d_comp = time.time()
+    
+    # Pass j and w explicitly to your experiment wrapper / expm call
+    res_5d = run_5d_experiment(
+        p_start_5d, path_vel_5d, monster_5d_embedding, v_to_transport_5d,
+        j=j_start_5d, w=w_start_5d
+    )
+    print(f"5D Compilation took: {time.time() - start_5d_comp:.2f}s\n")
+
+    print("Starting 5D Hyper-Manifold Hot Execution...")
+    start_5d_run = time.time()
+    
+    # Hot Run
+    results_5d = run_5d_experiment(
+        p_start_5d, path_vel_5d, monster_5d_embedding, v_to_transport_5d,
+        j=j_start_5d, w=w_start_5d
+    )
+    duration_5d = (time.time() - start_5d_run) * 1000
+    
+    # Unpack all 5 outputs returned by your expm function
+    final_pos, final_vel, transported_v, final_jac, jac_velo = results_5d
+    
+    print(f"5D REAL Hot Run: {duration_5d:.3f}ms")
+    print(f"Final 5D Position:   {final_pos}")
+    print(f"Initial Jacobi Vector: {j_start_5d}")
+    print(f"Final Jacobi Vector:   {final_jac}\n")
+    
+    # Baseline Metric Conservation Verification
+    g_start_5d = mtc.fwdmet(monster_5d_embedding, p_start_5d)
+    g_end_5d = mtc.fwdmet(monster_5d_embedding, final_pos) 
+    
+    initial_speed_5d = metric_length(path_vel_5d, g_start_5d)
+    final_speed_5d = metric_length(final_vel, g_end_5d)       
+    
+    print(f"Initial 5D Speed: {initial_speed_5d:.8f}")
+    print(f"Final 5D Speed:   {final_speed_5d:.8f}")
+    print(f"Absolute Drift:   {jnp.abs(final_speed_5d - initial_speed_5d):.2e}\n")
+
+    # THE CRUCIAL GEOMETRIC CHECKS
+    # Check 1: Did the Jacobi field remain locked in flat space, or did curvature act on it?
+    is_flat_space_linear = jnp.allclose(final_jac, j_start_5d + w_start_5d * 1.0, atol=1e-5)
+    
+    if is_flat_space_linear:
+        print("❌ DIAGNOSTIC RESULT: Geodesics work, but Jacobi Fields are failing to experience curvature!")
+        print("Your Riemann contraction string or derivative coupling in geoexp_term evaluates to zero.")
+    else:
+        print("✅ DIAGNOSTIC RESULT: Jacobi Fields are dynamically evolving under hyper-manifold curvature!")
+
+# Run the test
+test_5d_hyper_manifold_with_jacobi()
+
