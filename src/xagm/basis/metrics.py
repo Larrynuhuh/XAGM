@@ -58,3 +58,30 @@ def metinterp(g0: Matrix, v0: Vector,
     ig = jnp.einsum('ik, k, jk -> ij', intvecs, ival, intvecs)
 
     return ig
+
+import numpy as np
+
+def laplace_beltrami(scalar_field_func, embedding_func):
+
+    def laplace_field(x: Vector) -> Scalar:
+
+        def weighted_gradient(pos):
+
+            g_local = fwdmet(embedding_func, pos)
+            g_inv = jnp.linalg.inv(g_local)
+            det_g = jnp.linalg.det(g_local)
+            sqrt_det = jnp.sqrt(det_g + 1e-15)
+            
+            grad_psi = jax.grad(scalar_field_func)(pos)
+
+            return sqrt_det * jnp.einsum('ij, j -> i', g_inv, grad_psi)
+            
+        jac_inner = jax.jacobian(weighted_gradient)(x)
+        div_inner = jnp.trace(jac_inner)
+
+        g_at_x = fwdmet(embedding_func, x)
+        sqrt_det_local = jnp.sqrt(jnp.linalg.det(g_at_x) + 1e-15)
+
+        return us.div(div_inner, sqrt_det_local)
+        
+    return laplace_field
