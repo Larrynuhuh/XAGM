@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: xagm
-Version: 0.2.1
+Version: 0.2.2
 Summary: A high-performance, coordinate-free Riemannian geometry library accelerated by JAX and Diffrax
 Author-email: SWASTIK <swastiksingh1402@gmai.com>
 License: MIT
@@ -18,11 +18,15 @@ Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
+License-File: LICENSE
 Requires-Dist: jax>=0.4.0
 Requires-Dist: jaxlib>=0.4.0
 Requires-Dist: jaxtyping>=0.2.0
 Requires-Dist: diffrax>=0.5.0
+Dynamic: license-file
 
+
+=======
 # XAGM (Accelerated Autodiff Geometry Multi-dimensional)
 
 **XAGM** is a lightweight Riemannian Differentiable Geometry utility library built on top of JAX and Diffrax. 
@@ -34,6 +38,7 @@ It handles coordinate-free operations exclusively on **Riemannian Metrics**. It 
 ## Performance Approach
 Instead of relying on loops or standard Python numerical array evaluations, XAGM uses JAX's **XLA (Accelerated Linear Algebra)** compiler. 
 
+=======
 When you JIT-compile or vectorize (`vmap`) these operations, XLA fuses the differential geometry calculations (like Christoffel connections, metrics, and adaptive ODE solvers) into flat, hardware-optimized loops. 
 
 While execution speed scales based on your embedding dimensions, step counts, and hardware limits, it generally provides a highly efficient execution pipeline compared to traditional pure-Python geometry implementations. You are highly encouraged to run your own runtime profiles via `pytest-benchmark` to see how it matches your use case.
@@ -69,3 +74,4 @@ It expects a basic working familiarity with core differential geometry concepts 
 
 ## 📚 Documentation
 API documentation is compiled straight from the inline Google-style docstrings in the source code. You can generate a local readable HTML reference index by installing `mkdocs-material` and executing `mkdocs serve` inside the project root folder.
+this is the link to the documentation: https://Larrynuhuh.github.io/XAGM/
