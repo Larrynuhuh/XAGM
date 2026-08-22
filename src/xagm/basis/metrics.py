@@ -68,7 +68,7 @@ def laplace_beltrami(scalar_field_func, embedding_func):
         def weighted_gradient(pos):
 
             g_local = fwdmet(embedding_func, pos)
-            g_inv = jnp.linalg.inv(g_local)
+            g_inv = jnp.linalg.inv(g_local + 1e-9 * jnp.eye(g_local.shape[-1]))
             det_g = jnp.linalg.det(g_local)
             sqrt_det = jnp.sqrt(det_g + 1e-15)
             
