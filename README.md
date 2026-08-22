@@ -5,7 +5,6 @@
 **XAGM** is a lightweight Riemannian Differentiable Geometry utility library built on top of JAX and Diffrax. 
 
 It handles coordinate-free operations exclusively on **Riemannian Metrics**. It assumes your metric tensors remain strictly SPD across your target mapping regions to ensure stable calculations.
->>>>>>> 71531dc (Uploading documentation)
 
 ---
 
