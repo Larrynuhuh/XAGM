@@ -1,0 +1,36 @@
+site_name: XAGM
+site_description: High-performance, coordinate-free Riemannian geometry utilities accelerated by JAX and Diffrax.
+site_author: SWASTIK
+
+theme:
+  name: material
+  palette:
+    scheme: slate  # Premium dark theme mode
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.tabs
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            show_submodules: false
+
+# Loads the mathematical rendering scripts natively
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://cloudflare.com
+  - https://cloudflare.com
+  - javascripts/katex.js
+
+extra_css:
+  - https://cloudflare.com
