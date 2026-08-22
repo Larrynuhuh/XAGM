@@ -1,19 +1,71 @@
 Metadata-Version: 2.4
 Name: xagm
-Version: 0.2.0
+Version: 0.2.1
+Summary: A high-performance, coordinate-free Riemannian geometry library accelerated by JAX and Diffrax
+Author-email: SWASTIK <swastiksingh1402@gmai.com>
+License: MIT
+Project-URL: Homepage, https://github.com
+Project-URL: Documentation, https://github.com#readme
+Project-URL: Repository, https://github.com.git
+Project-URL: Issues, https://github.com/issues
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
 Description-Content-Type: text/markdown
-Requires-Dist: jax
-Requires-Dist: jaxlib
-Requires-Dist: jaxtyping
-Requires-Dist: diffrax
+Requires-Dist: jax>=0.4.0
+Requires-Dist: jaxlib>=0.4.0
+Requires-Dist: jaxtyping>=0.2.0
+Requires-Dist: diffrax>=0.5.0
 
-XAGM is a Riemannian Differentiable Geometry engine which stands for Accelerated Autodiff Geometry Multi-dimensional. It deals exclusively in Riemannian SPD metrics, and it is MANDATORY the metrics are Symmetric Positive Definite (SPD) for it to work.
-It offers a vast array of functions, with 4 modules to call upon, them being metrics, linear, vectors, and calc. Vectors deal mainly with linear algebra adjacent functions with respect to the metric tensor. Speaking of the metric tensor, XAGM allows you to use fwdmet to create a pullback metric. 
+# XAGM (Accelerated Autodiff Geometry Multi-dimensional)
 
-The crown jewels of XAGM would be christoffel(), geoexp_solver(), geolog_solver(), and geodist(), with geoexp_solver consistently performing at sub millisecond speeds, and geolog_solver being in the comfortable range of 2-20ms each run depending on how many steps are given to the solver. 
+**XAGM** is a lightweight Riemannian Differentiable Geometry utility library built on top of JAX and Diffrax. 
 
-XAGM has been benchmarked (quite unofficially so you are free to do your own runtime checks) and observed to outperform basically every other geometry application in numpy and the dominating Geometry powerhouses. You are highly encouraged, however, to confirm that yourself too. 
+It handles coordinate-free operations exclusively on **Riemannian Metrics**. It assumes your metric tensors remain strictly SPD across your target mapping regions to ensure stable calculations.
 
-XAGM is a bit hard to use at first since it expects a decent background in maths for most of the functions and a clear understanding of how to use JAX native functions like vmap and jit along with static_argnums and static_argnames, but, overall, if you behave nicely and pass clean arrays into it, it will reward you. Documentation on this project will be coming soon! (or never at all. No in between.)
+---
 
+## Performance Approach
+Instead of relying on loops or standard Python numerical array evaluations, XAGM uses JAX's **XLA (Accelerated Linear Algebra)** compiler. 
 
+When you JIT-compile or vectorize (`vmap`) these operations, XLA fuses the differential geometry calculations (like Christoffel connections, metrics, and adaptive ODE solvers) into flat, hardware-optimized loops. 
+
+While execution speed scales based on your embedding dimensions, step counts, and hardware limits, it generally provides a highly efficient execution pipeline compared to traditional pure-Python geometry implementations. You are highly encouraged to run your own runtime profiles via `pytest-benchmark` to see how it matches your use case.
+
+---
+
+## 📦 Installation
+```bash
+pip install xagm
+```
+
+---
+
+## 🗺️ API Namespace & Organization
+XAGM organizes its functions into two primary folder-level gates to keep your workspace simple and tidy. Internal helper tools are kept private from your editor autocomplete.
+
+### 1. `xagm.basis`
+Handles core metric contractions, automated pullbacks, linear interpolation arrays, and localized coordinate layouts.
+*   **API:** `fwdmet()`, `revmet()`, `iprod()`, `norm()`, `ang()`, `grid()`, `line()`, `laplace_beltrami()`
+
+### 2. `xagm.manifolds`
+Handles connection tensor calculus, parallel vector field transport, and numerical adaptive ODE integrations.
+*   **API:** `christoffel_kind1()`, `christoffel_kind2()`, `expm()`, `paratrans()`, `unitransp()`, `jacobi_fields()`, `riemtens()`, `rictens()`, `vectproj()`, `scalproj()`, `nrml()`, `unitize()`
+
+---
+
+## 💡 Notes on Usage
+Because XAGM relies on JAX tracing, your custom mapping functions need to be mathematically smooth, side-effect-free (pure functions), and properly aligned for standard array broadcasting. 
+
+It expects a basic working familiarity with core differential geometry concepts and standard JAX transformation paradigms (`jax.jit`, `jax.vmap`). If your target arrays are cleanly structured, it will provide highly reliable and parallelizable outputs.
+
+---
+
+## 📚 Documentation
+API documentation is compiled straight from the inline Google-style docstrings in the source code. You can generate a local readable HTML reference index by installing `mkdocs-material` and executing `mkdocs serve` inside the project root folder.
