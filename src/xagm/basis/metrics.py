@@ -1,9 +1,9 @@
-
-from . import geoutils as us
-
 import jax 
 import jax.numpy as jnp
-from .geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
+from .. import geoutils as us
+from ..geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
+import numpy as np
+
 
 
 def euclid(x: Vector) -> Matrix:

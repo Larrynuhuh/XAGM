@@ -1,12 +1,11 @@
-
-from . import geoutils as us
-
 import jax 
 import jax.numpy as jnp
-from .geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
+import diffrax
+from .. import geoutils as us
+from ..geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
 from ..basis import linear as lin
 from ..basis import metrics as mtc
-import diffrax
+
 
 def christoffel_kind1(func, x: Vector) -> Matrix:
     """Computes the Christoffel symbols of the first kind using structural JVP vectorization.

@@ -1,10 +1,9 @@
-
-from . import geoutils as us
-
 import jax 
 import jax.numpy as jnp
-from .geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
+from ..geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
+from .. import geoutils as us
 from . import metrics as mtc
+
 
 def grid(idx: JAXArray, dimens: tuple):
     """Unravels flat indices into a spatial coordinate grid with inverted axis ordering.

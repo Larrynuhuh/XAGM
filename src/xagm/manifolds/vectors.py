@@ -1,11 +1,9 @@
-
-from . import geoutils as us
-
 import jax 
 import jax.numpy as jnp
-from .geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
-
+from .. import geoutils as us
+from ..geoutils import Vector, Matrix, Scalar, Tensor, JAXArray
 from ..basis import metrics as mtc
+
 
 def nrml(g: Matrix, basis: Matrix) -> Matrix:
     """Computes a normalized, orientation-consistent orthonormal basis under a Riemannian metric.
