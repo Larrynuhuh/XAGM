@@ -27,6 +27,6 @@ def ang(g: Matrix, u: Vector, v: Vector) -> Scalar:
     den2 = mtc.norm(g, v)
 
     angle = us.div(numerator, (den1 * den2))
-    safe_cos = jnp.clip(angle, -1.0 + 1e-8, 1.0 - 1e-8)
+    safe_cos = jnp.clip(angle, -1.0, 1.0)
     
     return jnp.arccos(safe_cos)
