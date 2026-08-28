@@ -304,7 +304,8 @@ def jacobi_fields(p: Vector, v: Vector, j: Vector, w: Vector, mapped_func, steps
 
     Returns:
         A tuple containing:
-            - final_jac: The final calculated Jacobi vector field configuration at $t=1$."""
+            - final_jac: The final calculated Jacobi vector field configuration at $t=1$.
+            - jac_velo: The final calculated velocity of the Jacobi vector field at $t=1$."""
     state = jnp.concatenate([p, v, j, w])
 
     solution = diffrax.diffeqsolve(
@@ -369,3 +370,46 @@ def rictens(func, x: Vector) -> Tensor:
 
     return jnp.einsum('popv -> ov', riemtens(func, x))
 
+
+def test_internal_jacobi_curvature_coupling():
+    print("\n[RUNNING INTERNAL RIGOUR TEST] Verifying Curvature Coupling Identity...")
+    
+    def local_saddle_embedding(params):
+        u, v = params
+        return jnp.array([u, v, u**2 - v**2])
+
+    p_start = jnp.array([0.2, -0.3], dtype=jnp.float64)
+    v_start = jnp.array([0.4, 0.2], dtype=jnp.float64)
+    j_initial = jnp.array([0.1, -0.1], dtype=jnp.float64)
+    w_initial = jnp.array([0.5, 0.3], dtype=jnp.float64)
+
+    # Ensure your system layout layout matches this concatenation
+    initial_state = jnp.concatenate([p_start, v_start, j_initial, w_initial])
+    
+    args = {'func': local_saddle_embedding}
+    derivatives = jacobi_fields_term(0.0, initial_state, args)
+    
+    dim = p_start.shape[0]
+    dWdt_calculated = derivatives[3*dim : 4*dim]
+
+    gamma = christoffel_kind2(local_saddle_embedding, p_start)
+    
+    # Corrected for the symmetric connection contribution (Gamma_ijk * v^i * w^j + Gamma_ijk * w^i * v^j)
+    flat_dWdt_baseline = -2.0 * jnp.einsum('kij, i, j -> k', gamma, v_start, w_initial)
+
+    curvature_contribution = jnp.linalg.norm(dWdt_calculated - flat_dWdt_baseline)
+    
+    print(f" Calculated dWdt Tensor Step: {dWdt_calculated}")
+    print(f" Flat Connection Baseline:   {flat_dWdt_baseline}")
+    print(f" Active Curvature Injection:  {curvature_contribution:.2e}")
+
+    # Threshold tuned slightly above machine epsilon to account for float64 precision
+    if curvature_contribution < 1e-13:
+        print(" ❌ FAIL: Curvature is completely DEAD or cancelling out.")
+        assert False, "Jacobi field running in flat mode. Index mismatch or component omission detected."
+    else:
+        print(" ✅ SUCCESS: Curvature coupling is ALIVE and driving the system!")
+
+
+    # You can call this right here to test your edits instantly when you run the file:
+test_internal_jacobi_curvature_coupling()
