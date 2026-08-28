@@ -4,8 +4,11 @@ site_author: SWASTIK
 
 theme:
   name: material
+  
+  # FIXED: Point to your custom image using 'logo' instead of 'icon.logo'
+  logo: assets/xagmlogo.jpeg 
+  
   palette:
-    # Set the primary layout mode to pure light/white
     - scheme: default
       primary: black
       accent: red
@@ -13,8 +16,6 @@ theme:
     - navigation.tabs
     - content.code.copy
   icon:
-    # Replaces the logo with a standard mathematical manifold/torus/globe anchor node
-    logo: material/torus
     repo: github
 
 plugins:
@@ -31,11 +32,10 @@ markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
 
+# FIXED: Removed the empty cloudflare links
 extra_javascript:
-  - https://cloudflare.com
-  - https://cloudflare.com
   - javascripts/katex.js
 
+# FIXED: Removed the empty cloudflare links
 extra_css:
-  - https://cloudflare.com
   - stylesheets/custom.css
