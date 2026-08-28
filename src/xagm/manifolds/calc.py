@@ -86,7 +86,7 @@ def unitransp_term(t, state, args) -> Vector:
 
     dJdt = w - jnp.einsum('kij, i, j -> k', gamma, v, j)
 
-    dWdt = -curvature - jnp.einsum('kij, i, j -> k', gamma, v, w)
+    dWdt = curvature - jnp.einsum('kij, i, j -> k', gamma, v, w)
 
     return jnp.concatenate([v, v_dot, dvecdt, dJdt, dWdt])
 
