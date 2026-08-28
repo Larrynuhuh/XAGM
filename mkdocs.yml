@@ -4,9 +4,13 @@ site_author: SWASTIK
 
 theme:
   name: material
-  
-  # FIXED: Point to your custom image using 'logo' instead of 'icon.logo'
   logo: assets/xagmlogo.jpeg 
+  favicon: assets/xagmlogo.jpeg  # 👈 ADD THIS LINE HERE
+  palette:
+    - scheme: default
+      primary: black
+      accent: red
+ 
   
   palette:
     - scheme: default
