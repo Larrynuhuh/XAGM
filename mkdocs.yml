@@ -1,16 +1,21 @@
 site_name: XAGM
-site_description: High-performance, coordinate-free Riemannian geometry utilities accelerated by JAX and Diffrax.
+site_description: High-performance, lightweight and coordinate-free Riemannian geometry utilities accelerated by JAX and Diffrax.
 site_author: SWASTIK
 
 theme:
   name: material
   palette:
-    scheme: slate  # Premium dark theme mode
-    primary: indigo
-    accent: indigo
+    # Set the primary layout mode to pure light/white
+    - scheme: default
+      primary: black
+      accent: red
   features:
     - navigation.tabs
     - content.code.copy
+  icon:
+    # Replaces the logo with a standard mathematical manifold/torus/globe anchor node
+    logo: material/torus
+    repo: github
 
 plugins:
   - search
@@ -22,7 +27,6 @@ plugins:
             show_root_heading: true
             show_submodules: false
 
-# Loads the mathematical rendering scripts natively
 markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
@@ -34,3 +38,4 @@ extra_javascript:
 
 extra_css:
   - https://cloudflare.com
+  - stylesheets/custom.css
