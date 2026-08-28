@@ -268,9 +268,7 @@ def paratrans(p: Vector, v: Vector, vt: Vector, mapped_func, steps=512) -> Vecto
     return transported_v
 
 
-# =====================================================================
-# TIER 3: JACOBI FIELDS - FIXED 🛠️
-# =====================================================================
+
 def jacobi_fields_term(t, state, args):
     dim = state.shape[0] // 4 
     x = state[0:dim] 
