@@ -1,0 +1,31 @@
+:root, [data-md-color-scheme="default"] {
+  /* Core layout tones */
+  --md-primary-fg-color: #000000 !important;      /* Black header band */
+  --md-primary-bg-color: #ffffff !important;      /* White backgrounds */
+  --md-accent-fg-color: #d32f2f !important;       /* Crimson red accents */
+  
+  /* Text override blocks */
+  --md-typeset-color: #000000 !important;         /* Hard black body copy */
+  --md-typeset-a-color: #d32f2f !important;       /* Red hyperlinks */
+}
+
+/* Force sidebars and main content wrappers to stay pure white */
+.md-main__inner, .md-sidebar, .md-content {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* Force code text inside block highlights to remain black/dark for contrast */
+.md-typeset code {
+  color: #111111 !important;
+}
+
+/* Force headings to strictly respect the dark layout color grid */
+h1, h2, h3, h4, .md-nav__link {
+  color: #000000 !important;
+}
+
+/* Active navigation tab highlight rule line */
+.md-tabs__link--active {
+  color: #d32f2f !important;
+}
